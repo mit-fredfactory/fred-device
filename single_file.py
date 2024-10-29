@@ -12,6 +12,166 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QSlider, QGridLay
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap
+import cv2
+
+class FiberCamera(QWidget):
+    """Proceess video from camera to obtain the fiber diameter and display it"""
+    diameter_coeff = 0.00782324
+    use_binary_for_edges = False
+    def __init__(self) -> None:
+        super().__init__()
+        self.raw_image = QLabel()
+        self.processed_image = QLabel()
+        self.capture = cv2.VideoCapture(0)
+        self.line_value_updated = pyqtSignal(float)  # Create a new signal
+
+    def show_frame(self):
+        ret, frame = self.capture.read()
+        if ret:
+            # Live video
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Display the frame with lines
+            img = QImage(frame, frame.shape[1], frame.shape[0], QImage.Format_RGB888)
+            pix = QPixmap.fromImage(img)
+            self.raw_image.setPixmap(pix)
+            
+            # Process gray image
+            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+            
+            
+            # Process binary image
+            gray2 = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+            _, binary = cv2.threshold(gray2, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            
+            if FiberCamera.use_binary_for_edges is False:
+                edges = cv2.Canny(gray, 100, 255, apertureSize=3)
+            else:
+                edges = cv2.Canny(binary, 100, 255, apertureSize=3)
+
+            # Get diameter from the binary image
+            line_value = self.read_line_value(edges)
+            # Plot lines on the frame
+            frame = self.plot_lines(frame, edges)
+            # Emit the line_value_updated signal with the new line_value
+            #self.line_value_updated.emit(line_value)
+            # Update diameter plot
+            #diameter_mm_list.append(round(float(line_value), 2))  # Stores diameter values
+#             if line_value != 0:
+#                 diameter_plot.update_plot(current_time, line_value)
+
+            # Display the frame with lines
+            img = QImage(frame, frame.shape[1], frame.shape[0], QImage.Format_RGB888)
+            pix = QPixmap.fromImage(img)
+            self.raw_image.setPixmap(pix)
+            
+            # Display the gray image
+            #img2 = QImage(gray, gray.shape[1], gray.shape[0], QImage.Format_Grayscale8)
+            #pix2 = QPixmap.fromImage(img2)
+            #self.bvideo_label.setPixmap(pix2)
+            # Binary Image
+            img3 = QImage(binary, binary.shape[1], binary.shape[0], QImage.Format_Grayscale8)
+            pix3 = QPixmap.fromImage(img3)
+            self.processed_image.setPixmap(pix3)
+
+    """
+    def calibrate_line_value(self):
+        ret, frame = self.cap.read()
+        if ret:
+            # Live video
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Display the frame with lines
+            img = QImage(frame, frame.shape[1], frame.shape[0], QImage.Format_RGB888)
+            pix = QPixmap.fromImage(img)
+            self.video_label.setPixmap(pix)
+            
+            # Process gray image
+            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+            
+            edges = cv2.Canny(gray, 100, 255, apertureSize=3)
+            
+            lines = cv2.HoughLines(edges, 1, np.pi / 180, 100)
+            if lines is not None and len(lines) > 1:
+                line_distances = []
+                for line in lines:
+                    rho, theta = line[0]
+                    line_distances.append((rho, theta))
+                if len(line_distances) == 0:
+                    print("Empty")
+                    width_of_wire_mm = 0
+                    
+                else:
+                    max_distance = 0
+                    extreme_line1 = None
+                    extreme_line2 = None
+                    # Calculate the distance between every pair of lines
+                    for i in enumerate(line_distances):
+                        for j in range(i + 1, len(line_distances)):
+                            distance = abs(line_distances[i][0] - line_distances[j][0])
+                            if distance > max_distance:
+                                max_distance = distance
+                                extreme_line1 = line_distances[i]
+                                extreme_line2 = line_distances[j]
+                    # Calculate the width of the wire in mm (example conversion factor, needs tuning)
+                    width_of_wire_mm = max_distance
+                    return width_of_wire_mm
+            else:
+                return None
+        return None
+    """
+ 
+ 
+    def read_line_value(self, edges):
+        lines = cv2.HoughLines(edges, 1, np.pi / 180, 100)
+        if lines is not None and len(lines) > 1:
+            line_distances = []
+            for line in lines:
+                rho, theta = line[0]
+                line_distances.append((rho, theta))
+            if len(line_distances) == 0:
+                print("Empty")
+                width_of_wire_mm = 0
+                
+            else:
+                max_distance = 0
+                extreme_line1 = None
+                extreme_line2 = None
+                # Calculate the distance between every pair of lines
+                for i in range(len(line_distances)):
+                    for j in range(i + 1, len(line_distances)):
+                        distance = abs(line_distances[i][0] - line_distances[j][0])
+                        if distance > max_distance:
+                            max_distance = distance
+                            extreme_line1 = line_distances[i]
+                            extreme_line2 = line_distances[j]
+
+                # Calculate the width of the wire in mm (example conversion factor, needs tuning)
+                width_of_wire_mm = max_distance * FiberCamera.diameter_coeff
+        else:
+            width_of_wire_mm = 0
+        return width_of_wire_mm
+
+    def plot_lines(self, frame, edges):
+        lines = cv2.HoughLines(edges, 1, np.pi / 180, 110)
+        
+        if lines is not None:
+            for line in lines:
+                rho, theta = line[0]
+                a = np.cos(theta)
+                b = np.sin(theta)
+                x0 = a * rho
+                y0 = b * rho
+                x1 = int(x0 + 1000 * (-b))
+                y1 = int(y0 + 1000 * (a))
+                x2 = int(x0 - 1000 * (-b))
+                y2 = int(y0 - 1000 * (a))
+                cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+        return frame
+
+    def closeEvent(self, event):
+        self.cap.release()
+        event.accept()
 
 class UserInterface():
     """"Graphical User Interface Class"""
@@ -200,7 +360,7 @@ class UserInterface():
         text_box.setText("Enter a file name")
 
         # # # # # # # Fifth Column # # # # # # 
-        #video_widget = VideoWidget() # Add live video
+        video_widget = FiberCamera() # Add live video
         
         
         
@@ -301,11 +461,9 @@ class UserInterface():
         layout.addWidget(fanslider_value_label,23,7) # Add label to temp slider
         fanslider.valueChanged.connect(lambda value: fanslider_value_label.setText(str(value))) # update dc set speed slider
 
-        #layout.addWidget(video_widget.video_label, 2, 8, 11, 1)  # Add the video_label to the layout
+        layout.addWidget(video_widget.raw_image, 2, 8, 11, 1)  # Add the video_label to the layout
 
-        #layout.addWidget(video_widget.bvideo_label, 13, 8, 5,1)  # Add the video_label to the layout
-
-        #layout.addWidget(video_widget.binaryvideo_label, 18, 8, 5,1)  # Add the video_label to the layout
+        layout.addWidget(video_widget.processed_image, 13, 8, 11,1)  # Add the video_label to the layout
 
         layout.addWidget(text_box,24,6) # Add editable text box
 
@@ -325,7 +483,7 @@ class UserInterface():
         
         # ~~~~~~~~~~~ Start threading the GUI and motor control ~~~~~~~~~~~    
         timer = QTimer()
-        #timer.timeout.connect(update_gui)
+        timer.timeout.connect(video_widget.show_frame)
         timer.start(50)  # Update every 30 milliseconds
         
         #motor_thread = threading.Thread(target=motor_control_thread)
@@ -371,10 +529,6 @@ class UserInterface():
             self.axes.relim()
             self.axes.autoscale_view()
             self.draw()
-
-            
-
-
 
 if __name__ == "__main__":
     print("Starting FrED Device...")
