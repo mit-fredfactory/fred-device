@@ -1,6 +1,8 @@
 """FrED Device Single File"""
 import os
 import sys
+import cv2
+from typing import Tuple
 import matplotlib
 import matplotlib.pyplot as plt
 matplotlib.use('Qt5Agg')  # Use the Qt5Agg backend for matplotlib
@@ -12,12 +14,34 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QSlider, QGridLay
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap
-import cv2
+
+class Extruder():
+    def __init__(self):
+        self.speed = 0.0
+        self.duty_cycle = 0.0
+
+class DC_Motor():
+    def __init__(self):
+        self.speed = 0.0
+        self.set_speed = 0.0
+        self.gain = 0.0
+        self.oscillation_period = 0.0
+
+class Steppper_Motor():
+    def __init__(self):
+        self.speed = 0.0
+        self.set_speed = 0.0
+        self.gain = 0.0
+        self.oscillation_period = 0.0
+
+class Fan():
+    def __init__(self):
+        self.duty_cycle = 0.0
 
 class FiberCamera(QWidget):
     """Proceess video from camera to obtain the fiber diameter and display it"""
     diameter_coeff = 0.00782324
-    use_binary_for_edges = False
+    use_binary_for_edges = True
     def __init__(self) -> None:
         super().__init__()
         self.raw_image = QLabel()
@@ -25,148 +49,79 @@ class FiberCamera(QWidget):
         self.capture = cv2.VideoCapture(0)
         self.line_value_updated = pyqtSignal(float)  # Create a new signal
 
-    def show_frame(self):
-        ret, frame = self.capture.read()
-        if ret:
-            # Live video
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            
-            # Display the frame with lines
-            img = QImage(frame, frame.shape[1], frame.shape[0], QImage.Format_RGB888)
-            pix = QPixmap.fromImage(img)
-            self.raw_image.setPixmap(pix)
-            
-            # Process gray image
-            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-            
-            
-            # Process binary image
-            gray2 = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-            _, binary = cv2.threshold(gray2, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-            
-            if FiberCamera.use_binary_for_edges is False:
-                edges = cv2.Canny(gray, 100, 255, apertureSize=3)
-            else:
-                edges = cv2.Canny(binary, 100, 255, apertureSize=3)
+    def camera_loop(self) -> None:
+        """Loop to capture and process frames from the camera"""
+        success, frame = self.capture.read()
+        assert success, "Failed to capture frame"  # Check if frame is captured
 
-            # Get diameter from the binary image
-            line_value = self.read_line_value(edges)
-            # Plot lines on the frame
-            frame = self.plot_lines(frame, edges)
-            # Emit the line_value_updated signal with the new line_value
-            #self.line_value_updated.emit(line_value)
-            # Update diameter plot
-            #diameter_mm_list.append(round(float(line_value), 2))  # Stores diameter values
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # To RGB for GUI
+        edges, binary_frame = self.get_edges(frame)
+        # Get diameter from the binary image
+        # TODO: Tune and set to constants for fiber line detection
+        detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 80,
+                                         minLineLength=60, maxLineGap=10)
+        fiber_diameter = self.get_fiber_diameter(detected_lines)
+        # Plot lines on the frame
+        frame = self.plot_lines(frame, detected_lines)
+        # Emit the line_value_updated signal with the new line_value
+        #self.line_value_updated.emit(line_value)
+        # Update diameter plot
+        #diameter_mm_list.append(round(float(line_value), 2))  # Stores diameter values
 #             if line_value != 0:
 #                 diameter_plot.update_plot(current_time, line_value)
 
-            # Display the frame with lines
-            img = QImage(frame, frame.shape[1], frame.shape[0], QImage.Format_RGB888)
-            pix = QPixmap.fromImage(img)
-            self.raw_image.setPixmap(pix)
-            
-            # Display the gray image
-            #img2 = QImage(gray, gray.shape[1], gray.shape[0], QImage.Format_Grayscale8)
-            #pix2 = QPixmap.fromImage(img2)
-            #self.bvideo_label.setPixmap(pix2)
-            # Binary Image
-            img3 = QImage(binary, binary.shape[1], binary.shape[0], QImage.Format_Grayscale8)
-            pix3 = QPixmap.fromImage(img3)
-            self.processed_image.setPixmap(pix3)
+        # Display the frame with lines
+        image_for_gui = QImage(frame, frame.shape[1], frame.shape[0],
+                                QImage.Format_RGB888)
+        self.raw_image.setPixmap(QPixmap(image_for_gui))
 
-    """
-    def calibrate_line_value(self):
-        ret, frame = self.cap.read()
-        if ret:
-            # Live video
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            
-            # Display the frame with lines
-            img = QImage(frame, frame.shape[1], frame.shape[0], QImage.Format_RGB888)
-            pix = QPixmap.fromImage(img)
-            self.video_label.setPixmap(pix)
-            
-            # Process gray image
-            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-            
-            edges = cv2.Canny(gray, 100, 255, apertureSize=3)
-            
-            lines = cv2.HoughLines(edges, 1, np.pi / 180, 100)
-            if lines is not None and len(lines) > 1:
-                line_distances = []
-                for line in lines:
-                    rho, theta = line[0]
-                    line_distances.append((rho, theta))
-                if len(line_distances) == 0:
-                    print("Empty")
-                    width_of_wire_mm = 0
-                    
-                else:
-                    max_distance = 0
-                    extreme_line1 = None
-                    extreme_line2 = None
-                    # Calculate the distance between every pair of lines
-                    for i in enumerate(line_distances):
-                        for j in range(i + 1, len(line_distances)):
-                            distance = abs(line_distances[i][0] - line_distances[j][0])
-                            if distance > max_distance:
-                                max_distance = distance
-                                extreme_line1 = line_distances[i]
-                                extreme_line2 = line_distances[j]
-                    # Calculate the width of the wire in mm (example conversion factor, needs tuning)
-                    width_of_wire_mm = max_distance
-                    return width_of_wire_mm
-            else:
-                return None
-        return None
-    """
- 
- 
-    def read_line_value(self, edges):
-        lines = cv2.HoughLines(edges, 1, np.pi / 180, 100)
-        if lines is not None and len(lines) > 1:
-            line_distances = []
-            for line in lines:
-                rho, theta = line[0]
-                line_distances.append((rho, theta))
-            if len(line_distances) == 0:
-                print("Empty")
-                width_of_wire_mm = 0
-                
-            else:
-                max_distance = 0
-                extreme_line1 = None
-                extreme_line2 = None
-                # Calculate the distance between every pair of lines
-                for i in range(len(line_distances)):
-                    for j in range(i + 1, len(line_distances)):
-                        distance = abs(line_distances[i][0] - line_distances[j][0])
-                        if distance > max_distance:
-                            max_distance = distance
-                            extreme_line1 = line_distances[i]
-                            extreme_line2 = line_distances[j]
+        # Binary Image
+        image_for_gui = QImage(binary_frame, binary_frame.shape[1],
+                               binary_frame.shape[0], QImage.Format_Grayscale8)
+        self.processed_image.setPixmap(QPixmap(image_for_gui))
 
-                # Calculate the width of the wire in mm (example conversion factor, needs tuning)
-                width_of_wire_mm = max_distance * FiberCamera.diameter_coeff
+    def get_edges(self, frame: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Filter the frame to enhance the edges"""
+        # Divide the image into 4 horiizontal sections, and keep the middle section
+        height, _, _ = frame.shape
+        frame = frame[height//4:3*height//4, :]  # Keep the middle section
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        gaussian_blurred = cv2.GaussianBlur(gray_frame, (5, 5), 0) 
+        threshold_value, binary_frame = cv2.threshold(
+            gaussian_blurred, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        #print(f'Threshold value: {threshold_value}')
+
+        if FiberCamera.use_binary_for_edges is False:
+            edges = cv2.Canny(gray_frame, 100, 250, apertureSize=3)
         else:
-            width_of_wire_mm = 0
-        return width_of_wire_mm
+            edges = cv2.Canny(binary_frame, 100, 250, apertureSize=3)
+        return edges, binary_frame
 
-    def plot_lines(self, frame, edges):
-        lines = cv2.HoughLines(edges, 1, np.pi / 180, 110)
-        
+    def get_fiber_diameter(self, lines):
+        """Get the fiber diameter from the edges detected in the image"""
+        leftmost_min = sys.maxsize
+        leftmost_max = 0
+        rightmost_min = sys.maxsize
+        rightmost_max = 0
+        if lines is None or len(lines) <= 1:
+            return 0
+        for line in lines:
+            x0, _, x1, _ = line[0]
+            # Find if local leftmost is less than the previous leftmost 
+            leftmost_min = min(leftmost_min, x0, x1)
+            leftmost_max = max(leftmost_max, min(x0, x1))
+            rightmost_min = min(rightmost_min, max(x0, x1))
+            rightmost_max = max(rightmost_max, x0, x1)
+
+        return (((leftmost_max - leftmost_min) + (rightmost_max - rightmost_min))
+                / 2 * FiberCamera.diameter_coeff )
+
+    def plot_lines(self, frame, lines):
+        """Plot the detected lines on the frame"""
         if lines is not None:
             for line in lines:
-                rho, theta = line[0]
-                a = np.cos(theta)
-                b = np.sin(theta)
-                x0 = a * rho
-                y0 = b * rho
-                x1 = int(x0 + 1000 * (-b))
-                y1 = int(y0 + 1000 * (a))
-                x2 = int(x0 - 1000 * (-b))
-                y2 = int(y0 - 1000 * (a))
-                cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                x0, y0, x1, y1 = line[0]
+                cv2.line(frame, (x0, y0), (x1, y1), (255, 0, 0), 2)
         return frame
 
     def closeEvent(self, event):
@@ -483,7 +438,7 @@ class UserInterface():
         
         # ~~~~~~~~~~~ Start threading the GUI and motor control ~~~~~~~~~~~    
         timer = QTimer()
-        timer.timeout.connect(video_widget.show_frame)
+        timer.timeout.connect(video_widget.camera_loop)
         timer.start(50)  # Update every 30 milliseconds
         
         #motor_thread = threading.Thread(target=motor_control_thread)
@@ -533,3 +488,4 @@ class UserInterface():
 if __name__ == "__main__":
     print("Starting FrED Device...")
     UserInterface()
+    print("FrED Device Closed.")
