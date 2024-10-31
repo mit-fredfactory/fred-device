@@ -27,6 +27,10 @@ class Extruder():
     """Controller of the extrusion process: the heater and stepper motor"""
     HEATER_PIN = 6
     DIRECTION_PIN = 16
+    STEP_PIN = 12
+    MICROSTEP_PIN_A = 17
+    MICROSTEP_PIN_B = 27
+    MICROSTEP_PIN_C = 22
     DEFAULT_DIAMETER = 0.35
     MINIMUM_DIAMETER = 0.3
     MAXIMUM_DIAMETER = 0.6
@@ -34,6 +38,12 @@ class Extruder():
         self.speed = 0.0
         self.duty_cycle = 0.0
         self.channel_0 = None
+        GPIO.setup(Extruder.HEATER_PIN, GPIO.OUT)
+        GPIO.setup(Extruder.DIRECTION_PIN, GPIO.OUT)
+        GPIO.setup(Extruder.STEP_PIN, GPIO.OUT)
+        GPIO.setup(Extruder.MICROSTEP_PIN_A, GPIO.OUT)
+        GPIO.setup(Extruder.MICROSTEP_PIN_B, GPIO.OUT)
+        GPIO.setup(Extruder.MICROSTEP_PIN_C, GPIO.OUT)
 
     def initialize_thermistor(self):
         """Initialize the SPI for thermistor temperature readings"""
@@ -315,8 +325,8 @@ class UserInterface():
         
         self.window.setLayout(self.layout)
         self.window.setWindowTitle("MIT FrED")
-        self.window.setGeometry(100, 100, 1400, 800)
-        self.window.setFixedSize(1400, 800)
+        self.window.setGeometry(100, 100, 1600, 1000)
+        self.window.setFixedSize(1600, 1000)
         self.window.setAutoFillBackground(True)
         
         # ~~~~~~~~~~~ Start threading the GUI and motor control ~~~~~~~~~~~    
@@ -341,9 +351,9 @@ class UserInterface():
         diameter_plot = self.Plot("Diameter", "Diameter (mm)")
 
         self.layout.addWidget(binary_checkbox, 10, 1)
-        self.layout.addWidget(diameter_plot, 2, 0, 8, 5)
-        self.layout.addWidget(motor_plot, 11, 0, 8, 5)
-        self.layout.addWidget(temperature_plot, 19, 0, 8, 5)
+        self.layout.addWidget(diameter_plot, 2, 0, 8, 4)
+        self.layout.addWidget(motor_plot, 11, 0, 8, 4)
+        self.layout.addWidget(temperature_plot, 19, 0, 8, 4)
 
         return motor_plot, temperature_plot, diameter_plot
 
@@ -435,7 +445,7 @@ class UserInterface():
         target_temperature.setMinimum(65)
         target_temperature.setMaximum(105)
         target_temperature.setValue(95)
-        target_temperature.valueChanged.connect(self.update_sliders_label)
+        target_temperature.valueChanged.connect(self.update_temperature_slider_label)
 
         temperature_kp_label = QLabel("Temperature Kp")
         temperature_kp_label.setStyleSheet(font_style % 14)
@@ -485,7 +495,7 @@ class UserInterface():
         fan_duty_cycle.setMinimum(0)
         fan_duty_cycle.setMaximum(100)
         fan_duty_cycle.setValue(30)
-        fan_duty_cycle.valueChanged.connect(self.update_sliders_label)
+        fan_duty_cycle.valueChanged.connect(self.update_fan_slider_label)
 
         self.layout.addWidget(fan_duty_cycle_label, 22, 6)
         self.layout.addWidget(fan_duty_cycle, 23, 6)
@@ -515,7 +525,7 @@ class UserInterface():
         self.layout.addWidget(start_device, 1, 0)
         self.layout.addWidget(calibrate_motor, 1, 1)
         self.layout.addWidget(calibrate_camera, 1, 2)
-        self.layout.addWidget(download_csv, 1, 3)
+        self.layout.addWidget(download_csv, 24, 3)
 
     def start_gui(self) -> None:
         """Start the GUI"""
@@ -526,10 +536,13 @@ class UserInterface():
         self.window.show()
         self.app.exec_()
 
-    def update_sliders_label(self) -> None:
-        """Update the sliders labels"""
-        self.target_temperature_label.setText(f"Temperature: {self.target_temperature.value} C")
-        self.fan_duty_cycle_label.setText(f"Fan Duty Cycle: {self.fan_duty_cycle.value} %")
+    def update_temperature_slider_label(self, value) -> None:
+        """Update the temperature slider label"""
+        self.target_temperature_label.setText(f"Temperature: {value} C")
+    
+    def update_fan_slider_label(self, value) -> None:
+        """Update the fan slider label"""
+        self.fan_duty_cycle_label.setText(f"Fan Duty Cycle: {value} %")
 
     def spooling_control_toggle(self) -> None:
         """Toggle the spooling control"""
@@ -561,7 +574,7 @@ class UserInterface():
         QMessageBox.information(self.app.activeWindow(),
                                 "Calibration", "Camera calibration completed. "
                                 "Please restart the program.")    
-    
+
     def set_download_csv(self) -> None:
         """Call download csv from database"""
         QMessageBox.information(self.app.activeWindow(), "Download CSV",
