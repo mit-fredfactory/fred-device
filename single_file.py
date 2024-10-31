@@ -301,12 +301,16 @@ class UserInterface():
         # Editable text box for the CSV file name
         self.csv_filename = QLineEdit()
         self.csv_filename.setText("Enter a file name")
+        self.layout.addWidget(self.csv_filename, 24, 6)
 
         self.spooling_control_state = False
         self.device_started = False
         self.start_motor_calibration = False
 
         self.fiber_camera = FiberCamera()
+        self.layout.addWidget(self.fiber_camera.raw_image, 2, 8, 11, 1)
+        self.layout.addWidget(self.fiber_camera.processed_image, 13, 8, 11, 1)
+
         self.add_buttons()
         
         self.window.setLayout(self.layout)
@@ -337,9 +341,9 @@ class UserInterface():
         diameter_plot = self.Plot("Diameter", "Diameter (mm)")
 
         self.layout.addWidget(binary_checkbox, 10, 1)
-        self.layout.addWidget(diameter_plot, 2, 0, 8, 6)
-        self.layout.addWidget(motor_plot, 11, 0, 8, 6)
-        self.layout.addWidget(temperature_plot, 19, 0, 8, 6)
+        self.layout.addWidget(diameter_plot, 2, 0, 8, 5)
+        self.layout.addWidget(motor_plot, 11, 0, 8, 5)
+        self.layout.addWidget(temperature_plot, 19, 0, 8, 5)
 
         return motor_plot, temperature_plot, diameter_plot
 
@@ -356,7 +360,7 @@ class UserInterface():
         target_diameter.setSingleStep(0.01)
         target_diameter.setDecimals(2)
 
-        diameter_gain_label = QLabel("Diameter Gain r$'K_u'$")
+        diameter_gain_label = QLabel("Diameter Gain Ku")
         diameter_gain_label.setStyleSheet(font_style % 14)
         diameter_gain = QDoubleSpinBox()
         diameter_gain.setMinimum(0.1)
@@ -396,7 +400,7 @@ class UserInterface():
         motor_gain.setDecimals(1)
 
         motor_oscilation_period_label = QLabel("DC Motor Oscillation Period Tu")
-        motor_oscilation_period_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        motor_oscilation_period_label.setStyleSheet(font_style % 14)
         motor_oscilation_period = QDoubleSpinBox()
         motor_oscilation_period.setMinimum(0.0)
         motor_oscilation_period.setMaximum(2.0)
@@ -405,7 +409,7 @@ class UserInterface():
         motor_oscilation_period.setDecimals(1)
 
         extrusion_motor_speed_label = QLabel("Extrusion Motor Speed (RPM)")
-        extrusion_motor_speed_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        extrusion_motor_speed_label.setStyleSheet(font_style % 16)
         extrusion_motor_speed = QDoubleSpinBox()
         extrusion_motor_speed.setMinimum(0.0)
         extrusion_motor_speed.setMaximum(2.0)
@@ -487,10 +491,10 @@ class UserInterface():
         self.layout.addWidget(fan_duty_cycle, 23, 6)
 
         return fan_duty_cycle_label, fan_duty_cycle
-    
+
     def add_buttons(self):
         """Add buttons to the layout"""
-        font_style = "font-size: 14px; font-weight: bold;"
+        font_style = "background-color: green; font-size: 14px; font-weight: bold;"
         spooling_control = QPushButton("Start/stop spooling close loop control")
         spooling_control.setStyleSheet(font_style)
         spooling_control.clicked.connect(self.spooling_control_toggle)
@@ -503,7 +507,6 @@ class UserInterface():
         calibrate_camera = QPushButton("Calibrate camera")
         calibrate_camera.setStyleSheet(font_style)
         calibrate_camera.clicked.connect(self.set_calibrate_camera)
-
         download_csv = QPushButton("Download CSV File")
         download_csv.setStyleSheet(font_style)
         download_csv.clicked.connect(self.set_download_csv)
@@ -512,12 +515,13 @@ class UserInterface():
         self.layout.addWidget(start_device, 1, 0)
         self.layout.addWidget(calibrate_motor, 1, 1)
         self.layout.addWidget(calibrate_camera, 1, 2)
+        self.layout.addWidget(download_csv, 1, 3)
 
     def start_gui(self) -> None:
         """Start the GUI"""
         timer = QTimer()
         timer.timeout.connect(self.fiber_camera.camera_loop)
-        timer.start(50)  # Update every 30 milliseconds
+        timer.start(50)
 
         self.window.show()
         self.app.exec_()
@@ -536,7 +540,7 @@ class UserInterface():
         else:
             QMessageBox.information(self.app.activeWindow(), "Spooling Control",
                                     "Spooling control stopped.")
-            
+
     def set_start_device(self) -> None:
         """Set start device flag"""
         QMessageBox.information(self.app.activeWindow(), "Device Start",
