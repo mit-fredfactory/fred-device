@@ -1,6 +1,7 @@
 """FrED Device Single File"""
 import os
 import sys
+import threading
 import cv2
 import time
 import yaml
@@ -23,268 +24,7 @@ from fake_gpio import RotaryEncoder
 
 class Database():
     """Class to store the raw data and generate the CSV file"""
-class Extruder():
-    """Controller of the extrusion process: the heater and stepper motor"""
-    HEATER_PIN = 6
-    DIRECTION_PIN = 16
-    STEP_PIN = 12
-    MICROSTEP_PIN_A = 17
-    MICROSTEP_PIN_B = 27
-    MICROSTEP_PIN_C = 22
-    DEFAULT_DIAMETER = 0.35
-    MINIMUM_DIAMETER = 0.3
-    MAXIMUM_DIAMETER = 0.6
-    def __init__(self):
-        self.speed = 0.0
-        self.duty_cycle = 0.0
-        self.channel_0 = None
-        GPIO.setup(Extruder.HEATER_PIN, GPIO.OUT)
-        GPIO.setup(Extruder.DIRECTION_PIN, GPIO.OUT)
-        GPIO.setup(Extruder.STEP_PIN, GPIO.OUT)
-        GPIO.setup(Extruder.MICROSTEP_PIN_A, GPIO.OUT)
-        GPIO.setup(Extruder.MICROSTEP_PIN_B, GPIO.OUT)
-        GPIO.setup(Extruder.MICROSTEP_PIN_C, GPIO.OUT)
-
-    def initialize_thermistor(self):
-        """Initialize the SPI for thermistor temperature readings"""
-        spi = busio.SPI(clock=board.SCK, MISO=board.MISO, MOSI=board.MOSI)
-
-        # Create the cs (chip select)
-        cs = digitalio.DigitalInOut(board.D8)
-
-        # Create the mcp object
-        mcp = MCP.MCP3008(spi, cs)
-
-        # Create analog inputs connected to the input pins on the MCP3008
-        self.channel_0 = AnalogIn(mcp, MCP.P0)
-
-
-class Spooler():
-    """DC Motor Controller for the spooling process"""
-    ENCODER_A_PIN = 24
-    ENCODER_B_PIN = 23
-    PWM_PIN = 5
-    def __init__(self) -> None:
-        self.encoder = None
-        self.pwm = None
-        self.slope = 0.0
-        self.intercept = 0.0
-        GPIO.setup(Spooler.PWM_PIN, GPIO.OUT)
-
-    def initialize_encoder(self) -> None:
-        """Initialize the encoder and SPI"""
-        self.encoder = RotaryEncoder(Spooler.ENCODER_A_PIN,
-                                     Spooler.ENCODER_B_PIN, max_steps=0)
-
-    def start(self, frequency: float, duty_cycle: float) -> None:
-        """Start the DC Motor PWM"""
-        self.pwm = GPIO.PWM(Spooler.PWM_PIN, frequency)
-        self.pwm.start(duty_cycle)
-
-    def stop(self) -> None:
-        """Stop the DC Motor PWM"""
-        if self.pwm:
-            self.pwm.stop()
-
-    def update_duty_cycle(self, duty_cycle: float) -> None:
-        """Update the DC Motor PWM duty cycle"""
-        self.pwm.ChangeDutyCycle(duty_cycle)
-
-    def calibrate(self) -> None:
-        """Calibrate the DC Motor"""
-        # TODO: Finish
-        rpm_values = []
-        duty_cycles = []
-        num_samples = 5 
-
-        try:
-            for duty_cycle in range(20, 101, 10):  # Sweep duty cycle from 0% to 100% in increments of 10%
-                rpm_samples = []
-                for _ in range(num_samples):
-                    self.update_duty_cycle(duty_cycle)
-                    time.sleep(2)
-                    # Measure RPM
-                    oldtime = time.perf_counter()
-                    oldpos = self.encoder.steps
-                    time.sleep(tsample)
-                    newtime = time.perf_counter()
-                    newpos = self.encoder.steps
-                    dt = newtime - oldtime
-                    ds = newpos - oldpos
-                    rpm = ds / ppr / dt * 60
-                    rpm_samples.append(rpm)
-                avg_rpm = sum(rpm_samples) / num_samples
-                duty_cycles.append(dc)
-                rpm_values.append(avg_rpm)
-                print(f"Duty Cycle: {dc}% -> Avg RPM: {avg_rpm:.2f}")
-
-            # Fit a curve to the data
-            coefficients = np.polyfit(rpm_values, duty_cycles, 1)
-            self.slope = coefficients[0]
-            self.intercept = coefficients[1]
-
-            # Save the calibration data to a yaml file
-            file_path = "calibration.yaml"
-            with open(file_path, "w") as file:
-                calibration_data = yaml.safe_load(file)
-                calibration_data["motor_slope"] = self.slope
-                calibration_data["motor_intercept"] = self.intercept
-                yaml.dump(calibration_data, file)
-
-        except KeyboardInterrupt:
-            print("\nData collection stopped\n\n")
-
-        finally:
-            #gpio_controller.cleanup()
-            #gpio_controller.stop_dc_motor()
-            pass
-        QMessageBox.information(app.activeWindow(), "Calibration", "Motor calibration completed. Please restart the program.")
-        #gpio_controller.cleanup()
-        gpio_controller.stop_dc_motor()
-        self.encoder.steps = 0
-
-class Fan():
-    """Controller for the fan"""
-    PIN = 13
-    def __init__(self) -> None:
-        self.duty_cycle = 0.0
-        self.pwm = None
-        GPIO.setup(Fan.PIN, GPIO.OUT)
-
-    def start(self, frequency: float, duty_cycle: float) -> None:
-        """Start the fan PWM"""
-        self.pwm = GPIO.PWM(Fan.FAN_PIN, frequency)
-        self.pwm.start(duty_cycle)
-
-    def stop(self) -> None:
-        """Stop the fan PWM"""
-        if self.pwm:
-            self.pwm.stop()
-
-class FiberCamera(QWidget):
-    """Proceess video from camera to obtain the fiber diameter and display it"""
-    use_binary_for_edges = True
-    def __init__(self) -> None:
-        super().__init__()
-        self.raw_image = QLabel()
-        self.processed_image = QLabel()
-        self.capture = cv2.VideoCapture(0)
-        self.line_value_updated = pyqtSignal(float)  # Create a new signal
-        # TODO: Get from yaml
-        self.diameter_coefficient = 0.00782324
-
-    def camera_loop(self) -> None:
-        """Loop to capture and process frames from the camera"""
-        success, frame = self.capture.read()
-        assert success, "Failed to capture frame"  # Check if frame is captured
-
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # To RGB for GUI
-        edges, binary_frame = self.get_edges(frame)
-        # Get diameter from the binary image
-        # TODO: Tune and set to constants for fiber line detection
-        detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 80,
-                                         minLineLength=60, maxLineGap=10)
-        fiber_diameter = self.get_fiber_diameter(detected_lines)
-        # Plot lines on the frame
-        frame = self.plot_lines(frame, detected_lines)
-        # Emit the line_value_updated signal with the new line_value
-        #self.line_value_updated.emit(line_value)
-        # Update diameter plot
-        #diameter_mm_list.append(round(float(line_value), 2))  # Stores diameter values
-#             if line_value != 0:
-#                 diameter_plot.update_plot(current_time, line_value)
-
-        # Display the frame with lines
-        image_for_gui = QImage(frame, frame.shape[1], frame.shape[0],
-                                QImage.Format_RGB888)
-        self.raw_image.setPixmap(QPixmap(image_for_gui))
-
-        # Binary Image
-        image_for_gui = QImage(binary_frame, binary_frame.shape[1],
-                               binary_frame.shape[0], QImage.Format_Grayscale8)
-        self.processed_image.setPixmap(QPixmap(image_for_gui))
-
-    def get_edges(self, frame: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Filter the frame to enhance the edges"""
-        # Divide the image into 4 horiizontal sections, and keep the middle section
-        height, _, _ = frame.shape
-        frame = frame[height//4:3*height//4, :]  # Keep the middle section
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        gaussian_blurred = cv2.GaussianBlur(gray_frame, (5, 5), 0) 
-        threshold_value, binary_frame = cv2.threshold(
-            gaussian_blurred, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        #print(f'Threshold value: {threshold_value}')
-
-        if FiberCamera.use_binary_for_edges is False:
-            edges = cv2.Canny(gray_frame, 100, 250, apertureSize=3)
-        else:
-            edges = cv2.Canny(binary_frame, 100, 250, apertureSize=3)
-        return edges, binary_frame
-
-    def get_fiber_diameter(self, lines):
-        """Get the fiber diameter from the edges detected in the image"""
-        leftmost_min = sys.maxsize
-        leftmost_max = 0
-        rightmost_min = sys.maxsize
-        rightmost_max = 0
-        if lines is None or len(lines) <= 1:
-            return 0
-        for line in lines:
-            x0, _, x1, _ = line[0]
-            # Find if local leftmost is less than the previous leftmost 
-            leftmost_min = min(leftmost_min, x0, x1)
-            leftmost_max = max(leftmost_max, min(x0, x1))
-            rightmost_min = min(rightmost_min, max(x0, x1))
-            rightmost_max = max(rightmost_max, x0, x1)
-
-        return (((leftmost_max - leftmost_min) + (rightmost_max - rightmost_min))
-                / 2 * self.diameter_coefficient )
-
-    def plot_lines(self, frame, lines):
-        """Plot the detected lines on the frame"""
-        if lines is not None:
-            for line in lines:
-                x0, y0, x1, y1 = line[0]
-                cv2.line(frame, (x0, y0), (x1, y1), (255, 0, 0), 2)
-        return frame
-
-    def calibrate(self):
-        """Calibrate the camera"""
-        num_samples = 20
-        accumulated_diameter = 0
-        average_diameter = 0
-        valid_samples = 0
-
-        for _ in range(num_samples):
-            success, frame = self.capture.read()
-            assert success, "Failed to capture frame"  # Check if frame is captured
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            edges, _ = self.get_edges(frame)
-            detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 80,
-                                         minLineLength=60, maxLineGap=10)
-            fiber_diameter = self.get_fiber_diameter(detected_lines)
-            if fiber_diameter is not None:
-                accumulated_diameter += fiber_diameter
-                valid_samples += 1
-
-        if valid_samples > 0:
-            average_diameter = accumulated_diameter / valid_samples
-        
-        print(f"Average width of wire: {average_diameter} mm")
-
-        self.diameter_coefficient = 0.45/average_diameter
-        print(f"Diameter_coeff: {self.diameter_coefficient} mm")
-       
-        file_path = "calibration.yaml"
-        with open(file_path, encoding="utf-8") as file:
-            calibration_data = yaml.safe_load(file)
-            calibration_data["diameter_coefficient"] = self.diameter_coefficient
-            yaml.dump(calibration_data, file)
-
-    def closeEvent(self, event):
-        """Close the camera when the window is closed"""
-        self.cap.release()
-        event.accept()
+    temperature_readings = []
 
 class UserInterface():
     """"Graphical User Interface Class"""
@@ -344,7 +84,7 @@ class UserInterface():
         font_style = "font-size: 16px; font-weight: bold;"
         binary_checkbox = QCheckBox("Binary")
         binary_checkbox.setStyleSheet(font_style)
-        #binary_checkbox.stateChanged.connect(checkbox_state_changed)
+        #binary_checkbox.stateChanged.connect(checkbox_state_changed) TODO
 
         motor_plot = self.Plot("DC Spooling Motor", "Speed (RPM)")
         temperature_plot = self.Plot("Temperature", "Temperature (C)")
@@ -615,17 +355,365 @@ class UserInterface():
             self.axes.autoscale_view()
             self.draw()
 
-def hardware_thread():
+@dataclass
+class Thermistor:
+    """Constants and util functions for the thermistor"""
+    REFERENCE_TEMPERATURE = 298.15 # K
+    RESISTANCE_AT_REFERENCE = 100000 # Î©
+    BETA_COEFFICIENT = 3977 # K
+    VOLTAGE_SUPPLY = 3.3 # V
+    RESISTOR = 10000 # Î©
+
+    @classmethod
+    def get_temperature(cls, voltage: float) -> float:
+        """Get the temperature from the voltage using Steinhart-Hart equation"""
+        resistance = (cls.VOLTAGE_SUPPLY / voltage) * cls.RESISTOR / voltage
+        ln = math.log(resistance / cls.RESISTANCE_AT_REFERENCE)
+        return (1 / ((ln / cls.BETA_COEFFICIENT) +
+                     (1 / cls.REFERENCE_TEMPERATURE))) - 273.15
+
+class Extruder():
+    """Controller of the extrusion process: the heater and stepper motor"""
+    HEATER_PIN = 6
+    DIRECTION_PIN = 16
+    STEP_PIN = 12
+    MICROSTEP_PIN_A = 17
+    MICROSTEP_PIN_B = 27
+    MICROSTEP_PIN_C = 22
+    DEFAULT_DIAMETER = 0.35
+    MINIMUM_DIAMETER = 0.3
+    MAXIMUM_DIAMETER = 0.6
+    STEPS_PER_REVOLUTION = 200
+    RESOLUTION = {'1': (0, 0, 0),
+                  '1/2': (1, 0, 0),
+                  '1/4': (0, 1, 0),
+                  '1/8': (1, 1, 0),
+                 '1/16': (0, 0, 1),
+                 '1/32': (1, 0, 1)}
+    FACTOR = {'1': 1,
+                   '1/2': 2,
+                   '1/4': 4,
+                   '1/8': 8,
+                   '1/16': 16,
+                   '1/32': 32}
+    DEFAULT_MICROSTEPPING = '1/4'
+    DEFAULT_RPM = 0.6 # TODO: Delay is not being used, will be removed temporarily
+    SAMPLE_TIME = 0.1
+    
+    # Thermistor Constants
+    RESISTANCE_AT_T0 = 100000     # Î©
+    TEMPERATURE_REFERENCE = 298.15      # K
+    B = 3977         # K
+    VCC = 3.3        # Supply voltage
+    R = 10000        # R=10KÎ©
+    def __init__(self, gui: UserInterface) -> None:
+        self.gui = gui
+        self.speed = 0.0
+        self.duty_cycle = 0.0
+        self.channel_0 = None
+        GPIO.setup(Extruder.HEATER_PIN, GPIO.OUT)
+        GPIO.setup(Extruder.DIRECTION_PIN, GPIO.OUT)
+        GPIO.setup(Extruder.STEP_PIN, GPIO.OUT)
+        GPIO.setup(Extruder.MICROSTEP_PIN_A, GPIO.OUT)
+        GPIO.setup(Extruder.MICROSTEP_PIN_B, GPIO.OUT)
+        GPIO.setup(Extruder.MICROSTEP_PIN_C, GPIO.OUT)
+
+        self.motor_step(0)
+        self.initialize_thermistor()
+        self.set_microstepping(Extruder.DEFAULT_MICROSTEPPING)
+
+        self.current_diameter = 0.0
+        self.diameter_setpoint = Extruder.DEFAULT_DIAMETER
+        
+        # Control parameters
+        self.previous_time = 0.0
+
+    def initialize_thermistor(self):
+        """Initialize the SPI for thermistor temperature readings"""
+        spi = busio.SPI(clock=board.SCK, MISO=board.MISO, MOSI=board.MOSI)
+
+        # Create the cs (chip select)
+        cs = digitalio.DigitalInOut(board.D8)
+
+        # Create the mcp object
+        mcp = MCP.MCP3008(spi, cs)
+
+        # Create analog inputs connected to the input pins on the MCP3008
+        self.channel_0 = AnalogIn(mcp, MCP.P0)
+
+    def set_microstepping(self, mode: str) -> None:
+        """Set the microstepping mode"""
+        GPIO.output(Extruder.MICROSTEP_PIN_A, Extruder.RESOLUTION[mode][0])
+        GPIO.output(Extruder.MICROSTEP_PIN_B, Extruder.RESOLUTION[mode][1])
+        GPIO.output(Extruder.MICROSTEP_PIN_C, Extruder.RESOLUTION[mode][2])
+
+    def motor_step(self, direction: int) -> None:
+        """Step the motor in the given direction"""
+        GPIO.output(Extruder.DIRECTION_PIN, direction)
+
+    def temperature_control_loop(self, current_time: float) -> None:
+        """Closed loop control of the temperature of the extruder for desired diameter"""
+        if current_time - self.previous_time <= Extruder.SAMPLE_TIME:
+            return
+        try:
+            target_temperature = self.gui.target_temperature.value()
+            kp = self.gui.temperature_kp.value()
+            ki = self.gui.temperature_ki.value()
+            kd = self.gui.temperature_kd.value()
+
+            # Steinhart-Hart equation for thermistor temperature
+            temperature = Thermistor.get_temperature(self.channel_0.voltage)
+            Database.temperature_readings.append(temperature)
+            delta_time = current_time - self.previous_time
+            self.previous_time = current_time
+
+
+class Spooler():
+    """DC Motor Controller for the spooling process"""
+    ENCODER_A_PIN = 24
+    ENCODER_B_PIN = 23
+    PWM_PIN = 5
+    def __init__(self, gui: UserInterface) -> None:
+        self.gui = gui
+        self.encoder = None
+        self.pwm = None
+        self.slope = 0.0
+        self.intercept = 0.0
+        GPIO.setup(Spooler.PWM_PIN, GPIO.OUT)
+        self.initialize_encoder()
+
+    def initialize_encoder(self) -> None:
+        """Initialize the encoder and SPI"""
+        self.encoder = RotaryEncoder(Spooler.ENCODER_A_PIN,
+                                     Spooler.ENCODER_B_PIN, max_steps=0)
+
+    def start(self, frequency: float, duty_cycle: float) -> None:
+        """Start the DC Motor PWM"""
+        self.pwm = GPIO.PWM(Spooler.PWM_PIN, frequency)
+        self.pwm.start(duty_cycle)
+
+    def stop(self) -> None:
+        """Stop the DC Motor PWM"""
+        if self.pwm:
+            self.pwm.stop()
+
+    def update_duty_cycle(self, duty_cycle: float) -> None:
+        """Update the DC Motor PWM duty cycle"""
+        self.pwm.ChangeDutyCycle(duty_cycle)
+
+    def calibrate(self) -> None:
+        """Calibrate the DC Motor"""
+        # TODO: Finish
+        rpm_values = []
+        duty_cycles = []
+        num_samples = 5 
+
+        try:
+            for duty_cycle in range(20, 101, 10):  # Sweep duty cycle from 0% to 100% in increments of 10%
+                rpm_samples = []
+                for _ in range(num_samples):
+                    self.update_duty_cycle(duty_cycle)
+                    time.sleep(2)
+                    # Measure RPM
+                    oldtime = time.perf_counter()
+                    oldpos = self.encoder.steps
+                    time.sleep(tsample)
+                    newtime = time.perf_counter()
+                    newpos = self.encoder.steps
+                    dt = newtime - oldtime
+                    ds = newpos - oldpos
+                    rpm = ds / ppr / dt * 60
+                    rpm_samples.append(rpm)
+                avg_rpm = sum(rpm_samples) / num_samples
+                duty_cycles.append(dc)
+                rpm_values.append(avg_rpm)
+                print(f"Duty Cycle: {dc}% -> Avg RPM: {avg_rpm:.2f}")
+
+            # Fit a curve to the data
+            coefficients = np.polyfit(rpm_values, duty_cycles, 1)
+            self.slope = coefficients[0]
+            self.intercept = coefficients[1]
+
+            # Save the calibration data to a yaml file
+            file_path = "calibration.yaml"
+            with open(file_path, "w") as file:
+                calibration_data = yaml.safe_load(file)
+                calibration_data["motor_slope"] = self.slope
+                calibration_data["motor_intercept"] = self.intercept
+                yaml.dump(calibration_data, file)
+
+        except KeyboardInterrupt:
+            print("\nData collection stopped\n\n")
+
+        finally:
+            #gpio_controller.cleanup()
+            #gpio_controller.stop_dc_motor()
+            pass
+        QMessageBox.information(app.activeWindow(), "Calibration", "Motor calibration completed. Please restart the program.")
+        #gpio_controller.cleanup()
+        gpio_controller.stop_dc_motor()
+        self.encoder.steps = 0
+
+class Fan():
+    """Controller for the fan"""
+    PIN = 13
+    def __init__(self, gui: UserInterface) -> None:
+        self.gui = gui
+        self.duty_cycle = 0.0
+        self.pwm = None
+        GPIO.setup(Fan.PIN, GPIO.OUT)
+
+    def start(self, frequency: float, duty_cycle: float) -> None:
+        """Start the fan PWM"""
+        self.pwm = GPIO.PWM(Fan.FAN_PIN, frequency)
+        self.pwm.start(duty_cycle)
+
+    def stop(self) -> None:
+        """Stop the fan PWM"""
+        if self.pwm:
+            self.pwm.stop()
+
+class FiberCamera(QWidget):
+    """Proceess video from camera to obtain the fiber diameter and display it"""
+    use_binary_for_edges = True
+    def __init__(self) -> None:
+        super().__init__()
+        self.raw_image = QLabel()
+        self.processed_image = QLabel()
+        self.capture = cv2.VideoCapture(0)
+        self.line_value_updated = pyqtSignal(float)  # Create a new signal
+        # TODO: Get from yaml
+        self.diameter_coefficient = 0.00782324
+
+    def camera_loop(self) -> None:
+        """Loop to capture and process frames from the camera"""
+        success, frame = self.capture.read()
+        assert success, "Failed to capture frame"  # Check if frame is captured
+
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # To RGB for GUI
+        edges, binary_frame = self.get_edges(frame)
+        # Get diameter from the binary image
+        # TODO: Tune and set to constants for fiber line detection
+        detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 80,
+                                         minLineLength=60, maxLineGap=10)
+        fiber_diameter = self.get_fiber_diameter(detected_lines)
+        # Plot lines on the frame
+        frame = self.plot_lines(frame, detected_lines)
+        # Emit the line_value_updated signal with the new line_value
+        #self.line_value_updated.emit(line_value)
+        # Update diameter plot
+        #diameter_mm_list.append(round(float(line_value), 2))  # Stores diameter values
+#             if line_value != 0:
+#                 diameter_plot.update_plot(current_time, line_value)
+
+        # Display the frame with lines
+        image_for_gui = QImage(frame, frame.shape[1], frame.shape[0],
+                                QImage.Format_RGB888)
+        self.raw_image.setPixmap(QPixmap(image_for_gui))
+
+        # Binary Image
+        image_for_gui = QImage(binary_frame, binary_frame.shape[1],
+                               binary_frame.shape[0], QImage.Format_Grayscale8)
+        self.processed_image.setPixmap(QPixmap(image_for_gui))
+
+    def get_edges(self, frame: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Filter the frame to enhance the edges"""
+        # Divide the image into 4 horiizontal sections, and keep the middle section
+        height, _, _ = frame.shape
+        frame = frame[height//4:3*height//4, :]  # Keep the middle section
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        gaussian_blurred = cv2.GaussianBlur(gray_frame, (5, 5), 0) 
+        threshold_value, binary_frame = cv2.threshold(
+            gaussian_blurred, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        #print(f'Threshold value: {threshold_value}')
+
+        if FiberCamera.use_binary_for_edges is False:
+            edges = cv2.Canny(gray_frame, 100, 250, apertureSize=3)
+        else:
+            edges = cv2.Canny(binary_frame, 100, 250, apertureSize=3)
+        return edges, binary_frame
+
+    def get_fiber_diameter(self, lines):
+        """Get the fiber diameter from the edges detected in the image"""
+        leftmost_min = sys.maxsize
+        leftmost_max = 0
+        rightmost_min = sys.maxsize
+        rightmost_max = 0
+        if lines is None or len(lines) <= 1:
+            return 0
+        for line in lines:
+            x0, _, x1, _ = line[0]
+            # Find if local leftmost is less than the previous leftmost 
+            leftmost_min = min(leftmost_min, x0, x1)
+            leftmost_max = max(leftmost_max, min(x0, x1))
+            rightmost_min = min(rightmost_min, max(x0, x1))
+            rightmost_max = max(rightmost_max, x0, x1)
+
+        return (((leftmost_max - leftmost_min) + (rightmost_max - rightmost_min))
+                / 2 * self.diameter_coefficient )
+
+    def plot_lines(self, frame, lines):
+        """Plot the detected lines on the frame"""
+        if lines is not None:
+            for line in lines:
+                x0, y0, x1, y1 = line[0]
+                cv2.line(frame, (x0, y0), (x1, y1), (255, 0, 0), 2)
+        return frame
+
+    def calibrate(self):
+        """Calibrate the camera"""
+        num_samples = 20
+        accumulated_diameter = 0
+        average_diameter = 0
+        valid_samples = 0
+
+        for _ in range(num_samples):
+            success, frame = self.capture.read()
+            assert success, "Failed to capture frame"  # Check if frame is captured
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            edges, _ = self.get_edges(frame)
+            detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 80,
+                                         minLineLength=60, maxLineGap=10)
+            fiber_diameter = self.get_fiber_diameter(detected_lines)
+            if fiber_diameter is not None:
+                accumulated_diameter += fiber_diameter
+                valid_samples += 1
+
+        if valid_samples > 0:
+            average_diameter = accumulated_diameter / valid_samples
+        
+        print(f"Average width of wire: {average_diameter} mm")
+
+        self.diameter_coefficient = 0.45/average_diameter
+        print(f"Diameter_coeff: {self.diameter_coefficient} mm")
+       
+        file_path = "calibration.yaml"
+        with open(file_path, encoding="utf-8") as file:
+            calibration_data = yaml.safe_load(file)
+            calibration_data["diameter_coefficient"] = self.diameter_coefficient
+            yaml.dump(calibration_data, file)
+
+    def closeEvent(self, event):
+        """Close the camera when the window is closed"""
+        self.cap.release()
+        event.accept()
+
+
+def hardware_control(gui: UserInterface) -> None:
     """Thread to handle hardware control"""
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
-    fan = Fan()
-    motor = Spooler()
+    fan = Fan(gui)
+    spooler = Spooler(gui)
+    extruder = Extruder(gui)
     fan.start(1000, 45)
-    #motor.start(1000, 45)  # Not start until camera
+    #spooler.start(1000, 45)  # Not start until camera
 
 if __name__ == "__main__":
     print("Starting FrED Device...")
     ui = UserInterface()
+    hardware_thread = threading.Thread(target=hardware_control, args=(ui,))
+    hardware_thread.start()
+    threading.Lock()
     ui.start_gui()
     print("FrED Device Closed.")
