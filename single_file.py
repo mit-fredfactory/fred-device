@@ -21,6 +21,8 @@ from fake_gpio import FakeGPIO as GPIO
 from fake_gpio import RotaryEncoder
 #from fake_gpio import busio
 
+class Database():
+    """Class to store the raw data and generate the CSV file"""
 class Extruder():
     """Controller of the extrusion process: the heater and stepper motor"""
     HEATER_PIN = 6
@@ -80,6 +82,7 @@ class Spooler():
 
     def calibrate(self) -> None:
         """Calibrate the DC Motor"""
+        # TODO: Finish
         rpm_values = []
         duty_cycles = []
         num_samples = 5 
@@ -128,7 +131,7 @@ class Spooler():
         QMessageBox.information(app.activeWindow(), "Calibration", "Motor calibration completed. Please restart the program.")
         #gpio_controller.cleanup()
         gpio_controller.stop_dc_motor()
-            self.encoder.steps = 0
+        self.encoder.steps = 0
 
 class Fan():
     """Controller for the fan"""
@@ -150,7 +153,6 @@ class Fan():
 
 class FiberCamera(QWidget):
     """Proceess video from camera to obtain the fiber diameter and display it"""
-    diameter_coeff = 0.00782324
     use_binary_for_edges = True
     def __init__(self) -> None:
         super().__init__()
@@ -158,6 +160,8 @@ class FiberCamera(QWidget):
         self.processed_image = QLabel()
         self.capture = cv2.VideoCapture(0)
         self.line_value_updated = pyqtSignal(float)  # Create a new signal
+        # TODO: Get from yaml
+        self.diameter_coefficient = 0.00782324
 
     def camera_loop(self) -> None:
         """Loop to capture and process frames from the camera"""
@@ -224,7 +228,7 @@ class FiberCamera(QWidget):
             rightmost_max = max(rightmost_max, x0, x1)
 
         return (((leftmost_max - leftmost_min) + (rightmost_max - rightmost_min))
-                / 2 * FiberCamera.diameter_coeff )
+                / 2 * self.diameter_coefficient )
 
     def plot_lines(self, frame, lines):
         """Plot the detected lines on the frame"""
@@ -234,7 +238,41 @@ class FiberCamera(QWidget):
                 cv2.line(frame, (x0, y0), (x1, y1), (255, 0, 0), 2)
         return frame
 
+    def calibrate(self):
+        """Calibrate the camera"""
+        num_samples = 20
+        accumulated_diameter = 0
+        average_diameter = 0
+        valid_samples = 0
+
+        for _ in range(num_samples):
+            success, frame = self.capture.read()
+            assert success, "Failed to capture frame"  # Check if frame is captured
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            edges, _ = self.get_edges(frame)
+            detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 80,
+                                         minLineLength=60, maxLineGap=10)
+            fiber_diameter = self.get_fiber_diameter(detected_lines)
+            if fiber_diameter is not None:
+                accumulated_diameter += fiber_diameter
+                valid_samples += 1
+
+        if valid_samples > 0:
+            average_diameter = accumulated_diameter / valid_samples
+        
+        print(f"Average width of wire: {average_diameter} mm")
+
+        self.diameter_coefficient = 0.45/average_diameter
+        print(f"Diameter_coeff: {self.diameter_coefficient} mm")
+       
+        file_path = "calibration.yaml"
+        with open(file_path, encoding="utf-8") as file:
+            calibration_data = yaml.safe_load(file)
+            calibration_data["diameter_coefficient"] = self.diameter_coefficient
+            yaml.dump(calibration_data, file)
+
     def closeEvent(self, event):
+        """Close the camera when the window is closed"""
         self.cap.release()
         event.accept()
 
@@ -260,43 +298,22 @@ class UserInterface():
 
         self.fan_duty_cycle_label, self.fan_duty_cycle = self.add_fan_controls()
 
-        # Add an editable text box
-        text_box = QLineEdit()
-        text_box.setText("Enter a file name")
+        # Editable text box for the CSV file name
+        self.csv_filename = QLineEdit()
+        self.csv_filename.setText("Enter a file name")
 
         self.spooling_control_state = False
         self.device_started = False
         self.start_motor_calibration = False
 
         self.fiber_camera = FiberCamera()
+        self.add_buttons()
         
-        
-        
-        button = QPushButton("Download CSV File")
-        #button.clicked.connect(print_button_clicked)
-        button.setStyleSheet("background-color: green;font-size: 14px; font-weight: bold;")
-        
-        start_diameter_button = QPushButton("Start/stop close loop control")
-        #start_diameter_button.clicked.connect(start_diameter_button_clicked)
-        start_diameter_button.setStyleSheet("background-color: green;font-size: 14px; font-weight: bold;")
-        
-        start_device_button = QPushButton("Start device")
-        #start_device_button.clicked.connect(start_device_button_clicked)
-        start_device_button.setStyleSheet("background-color: green;font-size: 14px; font-weight: bold;")
-        
-        calibrate_motor_button = QPushButton("Calibrate motor")
-        #calibrate_motor_button.clicked.connect(calibrate_motor_button_clicked)
-        calibrate_motor_button.setStyleSheet("background-color: green;font-size: 14px; font-weight: bold;")
-        
-        calibrate_camera_button = QPushButton("Calibrate camera")
-        #calibrate_camera_button.clicked.connect(calibrate_camera_button_clicked)
-        calibrate_camera_button.setStyleSheet("background-color: green;font-size: 14px; font-weight: bold;")
-
-        # ~~~~~~~~~~~ Set the Layout ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        self.organize_layout()
-            
-        # ~~~~~~ Show the Layout ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    #     window.resize(800, 1900)  # Set window size (width, height)
+        self.window.setLayout(self.layout)
+        self.window.setWindowTitle("MIT FrED")
+        self.window.setGeometry(100, 100, 1400, 800)
+        self.window.setFixedSize(1400, 800)
+        self.window.setAutoFillBackground(True)
         
         # ~~~~~~~~~~~ Start threading the GUI and motor control ~~~~~~~~~~~    
         
@@ -308,35 +325,7 @@ class UserInterface():
         
         #motor_thread.join()
 
-    def organize_layout(self):
-        """Organize the layout of the GUI"""
-        #layout.addWidget(self.title,0,0,1,3) # Add title
-    
-        # Add the dc motor plot to the layout
-        
-        self.layout.addWidget(start_diameter_button, 10, 0) # Add button
-        
-        self.layout.addWidget(start_device_button, 1, 0) # Add button
-        
-        self.layout.addWidget(calibrate_motor_button, 1, 1) # Add button
-        
-        self.layout.addWidget(calibrate_camera_button, 1, 2) # Add button
-        
-        
-        # Add the temperature plot to the layout
-
-
-       
-        
-        self.window.setLayout(self.layout)
-    
-
-        self.window.setWindowTitle("MIT FrED")
-        self.window.setGeometry(100, 100, 1400, 800)
-        self.window.setFixedSize(1400, 800)
-        self.window.setAutoFillBackground(True)
-
-    def add_plots(self) -> Tuple[Self.Plot, Self.Plot, Self.Plot]:
+    def add_plots(self):
         """Add plots to the layout"""
         font_style = "font-size: 16px; font-weight: bold;"
         binary_checkbox = QCheckBox("Binary")
@@ -505,22 +494,24 @@ class UserInterface():
         spooling_control = QPushButton("Start/stop spooling close loop control")
         spooling_control.setStyleSheet(font_style)
         spooling_control.clicked.connect(self.spooling_control_toggle)
-        
         start_device = QPushButton("Start device")
         start_device.setStyleSheet(font_style)
         start_device.clicked.connect(self.set_start_device)
-        
         calibrate_motor = QPushButton("Calibrate motor")
         calibrate_motor.setStyleSheet(font_style)
         calibrate_motor.clicked.connect(self.set_calibrate_motor)
-        
         calibrate_camera = QPushButton("Calibrate camera")
         calibrate_camera.setStyleSheet(font_style)
-        calibrate_camera.clicked.connect(set_calibrate_camera)
-        
-        button = QPushButton("Download CSV File")
-        button.setStyleSheet(font_style)
-        #button.clicked.connect(print_button_clicked)
+        calibrate_camera.clicked.connect(self.set_calibrate_camera)
+
+        download_csv = QPushButton("Download CSV File")
+        download_csv.setStyleSheet(font_style)
+        download_csv.clicked.connect(self.set_download_csv)
+
+        self.layout.addWidget(spooling_control, 10, 0)
+        self.layout.addWidget(start_device, 1, 0)
+        self.layout.addWidget(calibrate_motor, 1, 1)
+        self.layout.addWidget(calibrate_camera, 1, 2)
 
     def start_gui(self) -> None:
         """Start the GUI"""
@@ -557,6 +548,22 @@ class UserInterface():
         QMessageBox.information(self.app.activeWindow(), "Motor Calibration",
                                 "Motor is calibrating.")
         self.start_motor_calibration = True
+
+    def set_calibrate_camera(self) -> None:
+        """Call calibrate camera"""
+        QMessageBox.information(self.app.activeWindow(), "Camera Calibration",
+                                "Camera is calibrating.")
+        self.fiber_camera.calibrate()
+        QMessageBox.information(self.app.activeWindow(),
+                                "Calibration", "Camera calibration completed. "
+                                "Please restart the program.")    
+    
+    def set_download_csv(self) -> None:
+        """Call download csv from database"""
+        QMessageBox.information(self.app.activeWindow(), "Download CSV",
+                                "Downloading CSV file.")
+        #database.download_csv()
+
     class Plot(FigureCanvas):
         """Base class for plots"""
         def __init__(self, title: str, y_label: str) -> None:
