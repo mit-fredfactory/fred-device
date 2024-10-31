@@ -14,20 +14,56 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QSlider, QGridLay
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap
+from fake_gpio import FakeGPIO as GPIO
+from fake_gpio import RotaryEncoder
+#from fake_gpio import busio
 
 class Extruder():
     def __init__(self):
         self.speed = 0.0
         self.duty_cycle = 0.0
+        self.channel_0 = None
 
-class DC_Motor():
-    def __init__(self):
-        self.speed = 0.0
-        self.set_speed = 0.0
-        self.gain = 0.0
-        self.oscillation_period = 0.0
+    def initialize_thermistor(self):
+        """Initialize the SPI for thermistor temperature readings"""
+        spi = busio.SPI(clock=board.SCK, MISO=board.MISO, MOSI=board.MOSI)
 
-class Steppper_Motor():
+        # Create the cs (chip select)
+        cs = digitalio.DigitalInOut(board.D8)
+
+        # Create the mcp object
+        mcp = MCP.MCP3008(spi, cs)
+
+        # Create analog inputs connected to the input pins on the MCP3008
+        self.channel_0 = AnalogIn(mcp, MCP.P0)
+
+
+class DCMotor():
+    """DC Motor Controller"""
+    ENCODER_A_PIN = 24
+    ENCODER_B_PIN = 23
+    PWM_PIN = 5
+    def __init__(self) -> None:
+        self.encoder = None
+        self.pwm = None
+        GPIO.setup(DCMotor.PWM_PIN, GPIO.OUT)
+
+    def initialize_encoder(self) -> None:
+        """Initialize the encoder and SPI"""
+        self.encoder = RotaryEncoder(DCMotor.ENCODER_A_PIN,
+                                     DCMotor.ENCODER_B_PIN, max_steps=0)
+
+    def start(self, frequency: float, duty_cycle: float) -> None:
+        """Start the DC Motor PWM"""
+        self.pwm = GPIO.PWM(DCMotor.PWM_PIN, frequency)
+        self.pwm.start(duty_cycle)
+
+    def stop(self) -> None:
+        """Stop the DC Motor PWM"""
+        if self.pwm:
+            self.pwm.stop()
+
+class Steppper():
     def __init__(self):
         self.speed = 0.0
         self.set_speed = 0.0
@@ -35,8 +71,22 @@ class Steppper_Motor():
         self.oscillation_period = 0.0
 
 class Fan():
-    def __init__(self):
+    """Controller for the fan"""
+    PIN = 13
+    def __init__(self) -> None:
         self.duty_cycle = 0.0
+        self.pwm = None
+        GPIO.setup(Fan.PIN, GPIO.OUT)
+
+    def start(self, frequency: float, duty_cycle: float) -> None:
+        """Start the fan PWM"""
+        self.pwm = GPIO.PWM(Fan.FAN_PIN, frequency)
+        self.pwm.start(duty_cycle)
+
+    def stop(self) -> None:
+        """Stop the fan PWM"""
+        if self.pwm:
+            self.pwm.stop()
 
 class FiberCamera(QWidget):
     """Proceess video from camera to obtain the fiber diameter and display it"""
@@ -484,6 +534,15 @@ class UserInterface():
             self.axes.relim()
             self.axes.autoscale_view()
             self.draw()
+
+def hardware_thread():
+    """Thread to handle hardware control"""
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    fan = Fan()
+    motor = DCMotor()
+    fan.start(1000, 45)
+    #motor.start(1000, 45)  # Not start until camera
 
 if __name__ == "__main__":
     print("Starting FrED Device...")
