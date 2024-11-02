@@ -3,6 +3,7 @@ import os
 import sys
 import threading
 import cv2
+import math
 import time
 import yaml
 from typing import Tuple
@@ -25,6 +26,13 @@ from fake_gpio import RotaryEncoder
 class Database():
     """Class to store the raw data and generate the CSV file"""
     temperature_readings = []
+    temperature_setpoint = []
+    temperature_error = []
+    temperature_pid_output = []
+    temperature_kp = []
+    temperature_ki = []
+    temperature_kd = []
+
 
 class UserInterface():
     """"Graphical User Interface Class"""
@@ -321,6 +329,10 @@ class UserInterface():
                                 "Downloading CSV file.")
         #database.download_csv()
 
+    def show_message(self, title: str, message: str) -> None:
+        """Show a message box"""
+        QMessageBox.information(self.app.activeWindow(), title, message)
+
     class Plot(FigureCanvas):
         """Base class for plots"""
         def __init__(self, title: str, y_label: str) -> None:
@@ -363,14 +375,28 @@ class Thermistor:
     BETA_COEFFICIENT = 3977 # K
     VOLTAGE_SUPPLY = 3.3 # V
     RESISTOR = 10000 # Î©
+    READINGS_TO_AVERAGE = 10
 
     @classmethod
     def get_temperature(cls, voltage: float) -> float:
-        """Get the temperature from the voltage using Steinhart-Hart equation"""
+        """Get the average temperature from the voltage using Steinhart-Hart 
+        equation"""
         resistance = (cls.VOLTAGE_SUPPLY / voltage) * cls.RESISTOR / voltage
         ln = math.log(resistance / cls.RESISTANCE_AT_REFERENCE)
-        return (1 / ((ln / cls.BETA_COEFFICIENT) +
+        temperature = (1 / ((ln / cls.BETA_COEFFICIENT) +
                      (1 / cls.REFERENCE_TEMPERATURE))) - 273.15
+        Database.temperature_readings.append(temperature)
+        average_temperature = 0
+        if len(Database.temperature_readings) > cls.READINGS_TO_AVERAGE:
+            # Get last constant readings 
+            average_temperature = (sum(Database.temperature_readings
+                                      [-cls.READINGS_TO_AVERAGE:]) / 
+                                      cls.READINGS_TO_AVERAGE)
+        else:
+            average_temperature = (sum(Database.temperature_readings) /
+                                   len(Database.temperature_readings))
+        return average_temperature
+
 
 class Extruder():
     """Controller of the extrusion process: the heater and stepper motor"""
@@ -399,13 +425,9 @@ class Extruder():
     DEFAULT_MICROSTEPPING = '1/4'
     DEFAULT_RPM = 0.6 # TODO: Delay is not being used, will be removed temporarily
     SAMPLE_TIME = 0.1
+    MAX_OUTPUT = 1
+    MIN_OUTPUT = 0
     
-    # Thermistor Constants
-    RESISTANCE_AT_T0 = 100000     # Î©
-    TEMPERATURE_REFERENCE = 298.15      # K
-    B = 3977         # K
-    VCC = 3.3        # Supply voltage
-    R = 10000        # R=10KÎ©
     def __init__(self, gui: UserInterface) -> None:
         self.gui = gui
         self.speed = 0.0
@@ -427,6 +449,8 @@ class Extruder():
         
         # Control parameters
         self.previous_time = 0.0
+        self.previous_error = 0.0
+        self.integral = 0.0
 
     def initialize_thermistor(self):
         """Initialize the SPI for thermistor temperature readings"""
@@ -461,11 +485,34 @@ class Extruder():
             ki = self.gui.temperature_ki.value()
             kd = self.gui.temperature_kd.value()
 
-            # Steinhart-Hart equation for thermistor temperature
-            temperature = Thermistor.get_temperature(self.channel_0.voltage)
-            Database.temperature_readings.append(temperature)
             delta_time = current_time - self.previous_time
             self.previous_time = current_time
+            temperature = Thermistor.get_temperature(self.channel_0.voltage)
+            error = target_temperature - temperature
+            self.integral += error * delta_time
+            derivative = (error - self.previous_error) / delta_time
+            self.previous_error = error
+            output = kp * error + ki * self.integral + kd * derivative
+            if output > Extruder.MAX_OUTPUT:
+                output = Extruder.MAX_OUTPUT
+            elif output < Extruder.MIN_OUTPUT:
+                output = Extruder.MIN_OUTPUT
+            GPIO.output(Extruder.HEATER_PIN,
+                        GPIO.HIGH if output > 0 else GPIO.LOW)
+            self.gui.temperature_plot.update_plot(current_time, temperature,
+                                                    target_temperature)
+            Database.temperature_setpoint.append(target_temperature)
+            Database.temperature_error.append(error)
+            Database.temperature_pid_output.append(output)
+            Database.temperature_kp.append(kp)
+            Database.temperature_ki.append(ki)
+            Database.temperature_kd.append(kd)
+        except Exception as e:
+            print(f"Error in temperature control loop: {e}")
+            self.gui.show_message("Error", "Error in temperature control loop",
+                                  "Please restart the program.")
+            
+
 
 
 class Spooler():
@@ -500,6 +547,15 @@ class Spooler():
     def update_duty_cycle(self, duty_cycle: float) -> None:
         """Update the DC Motor PWM duty cycle"""
         self.pwm.ChangeDutyCycle(duty_cycle)
+
+    def motor_control_loop(self, current_time: float) -> None:
+        """Closed loop control of the DC motor for desired diameter"""
+        if current_time - self.previous_time <= Spooler.SAMPLE_TIME:
+            return
+        try:
+            target_diameter = self.gui.target_diameter.value()
+            stepper_rpm = self.gui.extrusion_motor_speed.value()
+            
 
     def calibrate(self) -> None:
         """Calibrate the DC Motor"""
@@ -549,9 +605,10 @@ class Spooler():
             #gpio_controller.cleanup()
             #gpio_controller.stop_dc_motor()
             pass
-        QMessageBox.information(app.activeWindow(), "Calibration", "Motor calibration completed. Please restart the program.")
+        self.gui.show_message("Calibration", "Motor calibration completed. "
+                               "Please restart the program.")
         #gpio_controller.cleanup()
-        gpio_controller.stop_dc_motor()
+        self.stop()
         self.encoder.steps = 0
 
 class Fan():
