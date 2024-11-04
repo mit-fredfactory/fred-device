@@ -7,6 +7,17 @@ import math
 import time
 import yaml
 import csv
+import busio
+import board
+import atexit
+import datetime
+import digitalio
+import numpy as np
+import RPi.GPIO as GPIO
+import adafruit_mcp3xxx.mcp3008 as MCP
+from adafruit_mcp3xxx.analog_in import AnalogIn
+import warnings
+warnings.filterwarnings("ignore")
 from typing import Tuple
 from typing import Self
 import matplotlib
@@ -14,15 +25,13 @@ import matplotlib.pyplot as plt
 matplotlib.use('Qt5Agg')  # Use the Qt5Agg backend for matplotlib
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-import numpy as np
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QSlider, QGridLayout, QWidget, QDoubleSpinBox, QPushButton, QMessageBox, QLineEdit, QCheckBox, QDesktopWidget
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap
-from fake_gpio import FakeGPIO as GPIO
-from fake_gpio import RotaryEncoder
-#from fake_gpio import busio
+from gpiozero import RotaryEncoder
+
 
 class Database():
     """Class to store the raw data and generate the CSV file"""
@@ -73,15 +82,16 @@ class Database():
     def get_calibration_data(field: str) -> float:
         """Get calibration data from the yaml file"""
         with open("calibration.yaml", "r", encoding="utf-8") as file:
-            calibration_data = yaml.safe_load(file)
-            return calibration_data[field]
+            calibration_data = yaml.unsafe_load(file)
+        return calibration_data[field]
 
     @staticmethod
-    def update_calibration_data(field: str, value: float) -> None:
+    def update_calibration_data(field: str, value: str) -> None:
         """Update calibration data in the yaml file"""
+        with open("calibration.yaml", "r") as file:
+            calibration_data = yaml.unsafe_load(file)
         with open("calibration.yaml", "w") as file:
-            calibration_data = yaml.safe_load(file)
-            calibration_data[field] = value
+            calibration_data[field] = float(value)
             yaml.dump(calibration_data, file)
 
 class UserInterface():
@@ -117,8 +127,9 @@ class UserInterface():
 
         self.fiber_camera = FiberCamera()
         if self.fiber_camera.diameter_coefficient == -1:
-            self.show_message("Error", "Camera calibration data not found",
+            self.show_message("Camera calibration data not found",
                               "Please calibrate the camera.")
+            self.fiber_camera.diameter_coefficient = 0.00782324
         self.layout.addWidget(self.fiber_camera.raw_image, 2, 8, 11, 1)
         self.layout.addWidget(self.fiber_camera.processed_image, 13, 8, 11, 1)
 
@@ -420,7 +431,6 @@ class UserInterface():
             self.axes.autoscale_view()
             self.draw()
 
-@dataclass
 class Thermistor:
     """Constants and util functions for the thermistor"""
     REFERENCE_TEMPERATURE = 298.15 # K
@@ -597,7 +607,7 @@ class Spooler():
         self.slope = Database.get_calibration_data("motor_slope")
         self.intercept = Database.get_calibration_data("motor_intercept")
         if self.slope == -1 or self.intercept == -1:
-            self.gui.show_message("Error", "Motor calibration data not found",
+            self.gui.show_message( "Motor calibration data not found",
                                     "Please calibrate the motor.")
         GPIO.setup(Spooler.PWM_PIN, GPIO.OUT)
         self.initialize_encoder()
@@ -748,8 +758,8 @@ class Spooler():
             coefficients = np.polyfit(rpm_values, duty_cycles, 1)
             self.slope = coefficients[0]
             self.intercept = coefficients[1]
-            Database.update_calibration_data("motor_slope", self.slope)
-            Database.update_calibration_data("motor_intercept", self.intercept)
+            Database.update_calibration_data("motor_slope", str(self.slope))
+            Database.update_calibration_data("motor_intercept", str(self.intercept))
 
         except KeyboardInterrupt:
             print("\nData collection stopped\n\n")
@@ -804,11 +814,13 @@ class FiberCamera(QWidget):
         assert success, "Failed to capture frame"  # Check if frame is captured
 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # To RGB for GUI
+        height, _, _ = frame.shape
+        frame = frame[height//4:3*height//4, :]  # Keep the middle section
         edges, binary_frame = self.get_edges(frame)
         # Get diameter from the binary image
         # TODO: Tune and set to constants for fiber line detection
-        detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 80,
-                                         minLineLength=60, maxLineGap=10)
+        detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 50,
+                                         minLineLength=80, maxLineGap=20)
         fiber_diameter = self.get_fiber_diameter(detected_lines)
         # Plot lines on the frame
         frame = self.plot_lines(frame, detected_lines)
@@ -829,8 +841,6 @@ class FiberCamera(QWidget):
     def get_edges(self, frame: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Filter the frame to enhance the edges"""
         # Divide the image into 4 horiizontal sections, and keep the middle section
-        height, _, _ = frame.shape
-        frame = frame[height//4:3*height//4, :]  # Keep the middle section
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         gaussian_blurred = cv2.GaussianBlur(gray_frame, (5, 5), 0) 
         threshold_value, binary_frame = cv2.threshold(
@@ -898,7 +908,7 @@ class FiberCamera(QWidget):
         print(f"Diameter_coeff: {self.diameter_coefficient} mm")
 
         Database.update_calibration_data("diameter_coefficient", 
-                                         self.diameter_coefficient)
+                                         str(self.diameter_coefficient))
 
     def closeEvent(self, event):
         """Close the camera when the window is closed"""
