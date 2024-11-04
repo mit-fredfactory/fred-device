@@ -611,9 +611,9 @@ class Spooler():
         self.pwm = None
         self.slope = Database.get_calibration_data("motor_slope")
         self.intercept = Database.get_calibration_data("motor_intercept")
+        self.motor_calibration = True
         if self.slope == -1 or self.intercept == -1:
-            self.gui.show_message( "Motor calibration data not found",
-                                    "Please calibrate the motor.")
+            self.motor_calibration = False
         GPIO.setup(Spooler.PWM_PIN, GPIO.OUT)
         self.initialize_encoder()
         
@@ -668,6 +668,10 @@ class Spooler():
         if current_time - self.previous_time <= Spooler.SAMPLE_TIME:
             return
         try:
+            if not self.motor_calibration:
+                self.gui.show_message("Motor calibration data not found",
+                                    "Please calibrate the motor.")
+                self.motor_calibration = True
             target_diameter = self.gui.target_diameter.value()
             current_diameter = self.get_average_diameter()
 
@@ -769,10 +773,11 @@ class Spooler():
         except KeyboardInterrupt:
             print("\nData collection stopped\n\n")
 
-        self.gui.show_message("Calibration", "Motor calibration completed. "
+        self.gui.show_message("Motor calibration completed.",
                                "Please restart the program.")
         self.stop()
         self.previous_steps = self.encoder.steps
+        print("aaaa")
 
 class Fan():
     """Controller for the fan"""
@@ -782,6 +787,7 @@ class Fan():
         self.duty_cycle = 0.0
         self.pwm = None
         GPIO.setup(Fan.PIN, GPIO.OUT)
+        print(self.gui.device_started)
 
     def start(self, frequency: float, duty_cycle: float) -> None:
         """Start the fan PWM"""
@@ -850,11 +856,13 @@ class FiberCamera(QWidget):
 
     def get_edges(self, frame: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Filter the frame to enhance the edges"""
-        # Divide the image into 4 horiizontal sections, and keep the middle section
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        gaussian_blurred = cv2.GaussianBlur(gray_frame, (5, 5), 0) 
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)  # Gray
+        kernel = np.ones((5,5), np.uint8)
+        frame = cv2.erode(frame, kernel, iterations=2)
+        frame = cv2.dilate(frame, kernel, iterations=1)
+        gaussian_blurred = cv2.GaussianBlur(frame, (5, 5), 0) 
         threshold_value, binary_frame = cv2.threshold(
-            gaussian_blurred, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            gaussian_blurred, 127, 255, cv2.THRESH_BINARY)
         #print(f'Threshold value: {threshold_value}')
 
         if FiberCamera.use_binary_for_edges is False:
@@ -928,6 +936,7 @@ class FiberCamera(QWidget):
 
 def hardware_control(gui: UserInterface) -> None:
     """Thread to handle hardware control"""
+    time.sleep(1)
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
     try:
@@ -968,4 +977,5 @@ if __name__ == "__main__":
     hardware_thread.start()
     threading.Lock()
     ui.start_gui()
+    hardware_thread.join()
     print("FrED Device Closed.")
