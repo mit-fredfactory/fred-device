@@ -540,15 +540,20 @@ class Extruder():
 
     def stepper_control_loop(self) -> None:
         """Move the stepper motor constantly"""
-        setpoint_rpm = self.gui.extrusion_motor_speed.value()
-        delay = (60 / setpoint_rpm / Extruder.STEPS_PER_REVOLUTION /
-                 Extruder.FACTOR[Extruder.DEFAULT_MICROSTEPPING])
-        GPIO.output(Extruder.DIRECTION_PIN, 1)
-        GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
-        time.sleep(delay)
-        GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
-        time.sleep(delay)
-        Database.extruder_rpm.append(setpoint_rpm)
+        try:
+            setpoint_rpm = self.gui.extrusion_motor_speed.value()
+            delay = (60 / setpoint_rpm / Extruder.STEPS_PER_REVOLUTION /
+                    Extruder.FACTOR[Extruder.DEFAULT_MICROSTEPPING])
+            GPIO.output(Extruder.DIRECTION_PIN, 1)
+            GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
+            time.sleep(delay)
+            GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
+            time.sleep(delay)
+            Database.extruder_rpm.append(setpoint_rpm)
+        except Exception as e:
+            print(f"Error in stepper control loop: {e}")
+            self.gui.show_message("Error in stepper control loop",
+                                    "Please restart the program.")
 
     def temperature_control_loop(self, current_time: float) -> None:
         """Closed loop control of the temperature of the extruder for desired diameter"""
@@ -780,7 +785,7 @@ class Fan():
 
     def start(self, frequency: float, duty_cycle: float) -> None:
         """Start the fan PWM"""
-        self.pwm = GPIO.PWM(Fan.FAN_PIN, frequency)
+        self.pwm = GPIO.PWM(Fan.PIN, frequency)
         self.pwm.start(duty_cycle)
 
     def stop(self) -> None:
@@ -794,7 +799,12 @@ class Fan():
 
     def control_loop(self) -> None:
         """Set the desired speed"""
-        self.update_duty_cycle(self.gui.fan_duty_cycle.value())
+        try:
+            self.update_duty_cycle(self.gui.fan_duty_cycle.value())
+        except Exception as e:
+            print(f"Error in fan control loop: {e}")
+            self.gui.show_message("Error in fan control loop",
+                                    "Please restart the program.")
 
 class FiberCamera(QWidget):
     """Proceess video from camera to obtain the fiber diameter and display it"""
@@ -920,29 +930,40 @@ def hardware_control(gui: UserInterface) -> None:
     """Thread to handle hardware control"""
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
-    fan = Fan(gui)
-    spooler = Spooler(gui)
-    extruder = Extruder(gui)
-    fan.start(1000, 45)
-    spooler.start(1000, 0)
+    try:
+        fan = Fan(gui)
+        spooler = Spooler(gui)
+        extruder = Extruder(gui)
+        fan.start(1000, 45)
+        spooler.start(1000, 0)
+    except Exception as e:
+        print(f"Error in hardware control: {e}")
+        gui.show_message("Error while starting the device",
+                         "Please restart the program.")
 
     init_time = time.time()
     while True:
-        current_time = time.time() - init_time
-        if gui.start_motor_calibration:
-            spooler.calibrate()
-            gui.start_motor_calibration = False
-        if gui.device_started:
-            extruder.temperature_control_loop(current_time)
-            extruder.stepper_control_loop()
-            if gui.spooling_control_state:
-                spooler.motor_control_loop(current_time)
-            fan.control_loop()
-        time.sleep(0.1)
+        try:
+            current_time = time.time() - init_time
+            if gui.start_motor_calibration:
+                spooler.calibrate()
+                gui.start_motor_calibration = False
+            if gui.device_started:
+                extruder.temperature_control_loop(current_time)
+                extruder.stepper_control_loop()
+                if gui.spooling_control_state:
+                    spooler.motor_control_loop(current_time)
+                fan.control_loop()
+            time.sleep(0.1)
+        except Exception as e:
+            print(f"Error in hardware control loop: {e}")
+            gui.show_message("Error in hardware control loop",
+                             "Please restart the program.")
 
 if __name__ == "__main__":
     print("Starting FrED Device...")
     ui = UserInterface()
+    time.sleep(2)
     hardware_thread = threading.Thread(target=hardware_control, args=(ui,))
     hardware_thread.start()
     threading.Lock()
