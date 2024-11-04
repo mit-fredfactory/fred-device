@@ -7,6 +7,17 @@ import math
 import time
 import yaml
 import csv
+import busio
+import board
+import atexit
+import datetime
+import digitalio
+import numpy as np
+import RPi.GPIO as GPIO
+import adafruit_mcp3xxx.mcp3008 as MCP
+from adafruit_mcp3xxx.analog_in import AnalogIn
+import warnings
+warnings.filterwarnings("ignore")
 from typing import Tuple
 from typing import Self
 import matplotlib
@@ -14,20 +25,19 @@ import matplotlib.pyplot as plt
 matplotlib.use('Qt5Agg')  # Use the Qt5Agg backend for matplotlib
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-import numpy as np
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QSlider, QGridLayout, QWidget, QDoubleSpinBox, QPushButton, QMessageBox, QLineEdit, QCheckBox, QDesktopWidget
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap
-from fake_gpio import FakeGPIO as GPIO
-from fake_gpio import RotaryEncoder
-#from fake_gpio import busio
+from gpiozero import RotaryEncoder
+
 
 class Database():
     """Class to store the raw data and generate the CSV file"""
     time_readings = []
 
+    temperature_delta_time = []
     temperature_readings = []
     temperature_setpoint = []
     temperature_error = []
@@ -36,9 +46,12 @@ class Database():
     temperature_ki = []
     temperature_kd = []
     extruder_rpm = []
-
+    
+    diameter_delta_time = []
     diameter_readings = []
     diameter_setpoint = []
+
+    spooler_delta_time = []
     spooler_setpoint = []
     spooler_rpm = []
     spooler_gain = []
@@ -52,36 +65,63 @@ class Database():
         filename = filename + ".csv"
         with open(filename, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            writer.writerow(["Time", "Temperature", "Temperature Setpoint",
-                                "Temperature Error", "Temperature PID Output",
-                                "Temperature Kp", "Temperature Ki", "Temperature Kd",
-                                "Extruder RPM", "Diameter", "Diameter Setpoint",
-                                "Spooler Setpoint", "Spooler RPM", "Spooler Gain",
-                                "Spooler Oscillation Period", "Fan Duty Cycle"])
-            for i in enumerate(cls.time_readings):
-                writer.writerow([cls.time_readings[i], cls.temperature_readings[i],
-                                cls.temperature_setpoint[i], cls.temperature_error[i],
-                                cls.temperature_pid_output[i], cls.temperature_kp[i],
-                                cls.temperature_ki[i], cls.temperature_kd[i],
-                                cls.extruder_rpm[i], cls.diameter_readings[i],
-                                cls.diameter_setpoint[i], cls.spooler_setpoint[i],
-                                cls.spooler_rpm[i], cls.spooler_gain[i],
-                                cls.spooler_oscilation_period[i], cls.fan_duty_cycle[i]])
+            writer.writerow(["Time (s)", "Temperature delta time (s)", 
+                            "Temperature (C)", "Temperature setpoint (C)",
+                            "Temperature error (C)", "Temperature PID output",
+                            "Temperature Kp", "Temperature Ki", "Temperature Kd",
+                            "Extruder RPM", "Diameter delta time (s)",
+                            "Diameter (mm)", "Diameter setpoint (mm)",
+                            "Spooler delta time (s)", "Spooler setpoint (RPM)",
+                            "Spooler RPM", "Spooler gain", "Spooler oscilation period",
+                            "Fan duty cycle (%)"])
+            # Time array is bigger than the rest, make all arrays the same size
+            max_length = max(len(cls.time_readings), len(cls.temperature_delta_time),
+                            len(cls.temperature_readings), len(cls.temperature_setpoint),
+                            len(cls.temperature_error), len(cls.temperature_pid_output),
+                            len(cls.temperature_kp), len(cls.temperature_ki),
+                            len(cls.temperature_kd), len(cls.extruder_rpm),
+                            len(cls.diameter_delta_time), len(cls.diameter_readings),
+                            len(cls.diameter_setpoint), len(cls.spooler_delta_time),
+                            len(cls.spooler_setpoint), len(cls.spooler_rpm),
+                            len(cls.spooler_gain), len(cls.spooler_oscilation_period),
+                            len(cls.fan_duty_cycle))
+            for i in range(max_length):
+                row = [cls.time_readings[i] if i < len(cls.time_readings) else "",
+                       cls.temperature_delta_time[i] if i < len(cls.temperature_delta_time) else "",
+                       cls.temperature_readings[i] if i < len(cls.temperature_readings) else "",
+                       cls.temperature_setpoint[i] if i < len(cls.temperature_setpoint) else "",
+                       cls.temperature_error[i] if i < len(cls.temperature_error) else "",
+                       cls.temperature_pid_output[i] if i < len(cls.temperature_pid_output) else "",
+                       cls.temperature_kp[i] if i < len(cls.temperature_kp) else "",
+                       cls.temperature_ki[i] if i < len(cls.temperature_ki) else "",
+                       cls.temperature_kd[i] if i < len(cls.temperature_kd) else "",
+                       cls.extruder_rpm[i] if i < len(cls.extruder_rpm) else "",
+                       cls.diameter_delta_time[i] if i < len(cls.diameter_delta_time) else "",
+                       cls.diameter_readings[i] if i < len(cls.diameter_readings) else "",
+                       cls.diameter_setpoint[i] if i < len(cls.diameter_setpoint) else "",
+                       cls.spooler_delta_time[i] if i < len(cls.spooler_delta_time) else "",
+                       cls.spooler_setpoint[i] if i < len(cls.spooler_setpoint) else "",
+                       cls.spooler_rpm[i] if i < len(cls.spooler_rpm) else "",
+                       cls.spooler_gain[i] if i < len(cls.spooler_gain) else "",
+                       cls.spooler_oscilation_period[i] if i < len(cls.spooler_oscilation_period) else "",
+                       cls.fan_duty_cycle[i] if i < len(cls.fan_duty_cycle) else ""]
+                writer.writerow(row)
         print(f"CSV file {filename} generated.")
 
     @staticmethod
     def get_calibration_data(field: str) -> float:
         """Get calibration data from the yaml file"""
         with open("calibration.yaml", "r", encoding="utf-8") as file:
-            calibration_data = yaml.safe_load(file)
-            return calibration_data[field]
+            calibration_data = yaml.unsafe_load(file)
+        return calibration_data[field]
 
     @staticmethod
-    def update_calibration_data(field: str, value: float) -> None:
+    def update_calibration_data(field: str, value: str) -> None:
         """Update calibration data in the yaml file"""
+        with open("calibration.yaml", "r") as file:
+            calibration_data = yaml.unsafe_load(file)
         with open("calibration.yaml", "w") as file:
-            calibration_data = yaml.safe_load(file)
-            calibration_data[field] = value
+            calibration_data[field] = float(value)
             yaml.dump(calibration_data, file)
 
 class UserInterface():
@@ -115,10 +155,11 @@ class UserInterface():
         self.device_started = False
         self.start_motor_calibration = False
 
-        self.fiber_camera = FiberCamera()
+        self.fiber_camera = FiberCamera(self.target_diameter)
         if self.fiber_camera.diameter_coefficient == -1:
-            self.show_message("Error", "Camera calibration data not found",
+            self.show_message("Camera calibration data not found",
                               "Please calibrate the camera.")
+            self.fiber_camera.diameter_coefficient = 0.00782324
         self.layout.addWidget(self.fiber_camera.raw_image, 2, 8, 11, 1)
         self.layout.addWidget(self.fiber_camera.processed_image, 13, 8, 11, 1)
 
@@ -332,7 +373,7 @@ class UserInterface():
         """Start the GUI"""
         timer = QTimer()
         timer.timeout.connect(self.fiber_camera.camera_loop)
-        timer.start(100)
+        timer.start(200)
 
         self.window.show()
         self.app.exec_()
@@ -420,7 +461,6 @@ class UserInterface():
             self.axes.autoscale_view()
             self.draw()
 
-@dataclass
 class Thermistor:
     """Constants and util functions for the thermistor"""
     REFERENCE_TEMPERATURE = 298.15 # K
@@ -530,15 +570,20 @@ class Extruder():
 
     def stepper_control_loop(self) -> None:
         """Move the stepper motor constantly"""
-        setpoint_rpm = self.gui.extrusion_motor_speed.value()
-        delay = (60 / setpoint_rpm / Extruder.STEPS_PER_REVOLUTION /
-                 Extruder.FACTOR[Extruder.DEFAULT_MICROSTEPPING])
-        GPIO.output(Extruder.DIRECTION_PIN, 1)
-        GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
-        time.sleep(delay)
-        GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
-        time.sleep(delay)
-        Database.extruder_rpm.append(setpoint_rpm)
+        try:
+            setpoint_rpm = self.gui.extrusion_motor_speed.value()
+            delay = (60 / setpoint_rpm / Extruder.STEPS_PER_REVOLUTION /
+                    Extruder.FACTOR[Extruder.DEFAULT_MICROSTEPPING])
+            GPIO.output(Extruder.DIRECTION_PIN, 1)
+            GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
+            time.sleep(delay)
+            GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
+            time.sleep(delay)
+            Database.extruder_rpm.append(setpoint_rpm)
+        except Exception as e:
+            print(f"Error in stepper control loop: {e}")
+            self.gui.show_message("Error in stepper control loop",
+                                    "Please restart the program.")
 
     def temperature_control_loop(self, current_time: float) -> None:
         """Closed loop control of the temperature of the extruder for desired diameter"""
@@ -566,6 +611,7 @@ class Extruder():
                         GPIO.HIGH if output > 0 else GPIO.LOW)
             self.gui.temperature_plot.update_plot(current_time, temperature,
                                                     target_temperature)
+            Database.temperature_delta_time.append(delta_time)
             Database.temperature_setpoint.append(target_temperature)
             Database.temperature_error.append(error)
             Database.temperature_pid_output.append(output)
@@ -596,9 +642,9 @@ class Spooler():
         self.pwm = None
         self.slope = Database.get_calibration_data("motor_slope")
         self.intercept = Database.get_calibration_data("motor_intercept")
+        self.motor_calibration = True
         if self.slope == -1 or self.intercept == -1:
-            self.gui.show_message("Error", "Motor calibration data not found",
-                                    "Please calibrate the motor.")
+            self.motor_calibration = False
         GPIO.setup(Spooler.PWM_PIN, GPIO.OUT)
         self.initialize_encoder()
         
@@ -653,6 +699,10 @@ class Spooler():
         if current_time - self.previous_time <= Spooler.SAMPLE_TIME:
             return
         try:
+            if not self.motor_calibration:
+                self.gui.show_message("Motor calibration data not found",
+                                    "Please calibrate the motor.")
+                self.motor_calibration = True
             target_diameter = self.gui.target_diameter.value()
             current_diameter = self.get_average_diameter()
 
@@ -707,7 +757,7 @@ class Spooler():
                                                   target_diameter)
 
             # Add data to the database
-            Database.diameter_setpoint.append(target_diameter)
+            Database.spooler_delta_time.append(delta_time)
             Database.spooler_setpoint.append(setpoint_rpm)
             Database.spooler_rpm.append(current_rpm)
             Database.spooler_gain.append(diameter_ku)
@@ -748,16 +798,17 @@ class Spooler():
             coefficients = np.polyfit(rpm_values, duty_cycles, 1)
             self.slope = coefficients[0]
             self.intercept = coefficients[1]
-            Database.update_calibration_data("motor_slope", self.slope)
-            Database.update_calibration_data("motor_intercept", self.intercept)
+            Database.update_calibration_data("motor_slope", str(self.slope))
+            Database.update_calibration_data("motor_intercept", str(self.intercept))
 
         except KeyboardInterrupt:
             print("\nData collection stopped\n\n")
 
-        self.gui.show_message("Calibration", "Motor calibration completed. "
+        self.gui.show_message("Motor calibration completed.",
                                "Please restart the program.")
         self.stop()
         self.previous_steps = self.encoder.steps
+        print("aaaa")
 
 class Fan():
     """Controller for the fan"""
@@ -767,10 +818,11 @@ class Fan():
         self.duty_cycle = 0.0
         self.pwm = None
         GPIO.setup(Fan.PIN, GPIO.OUT)
+        print(self.gui.device_started)
 
     def start(self, frequency: float, duty_cycle: float) -> None:
         """Start the fan PWM"""
-        self.pwm = GPIO.PWM(Fan.FAN_PIN, frequency)
+        self.pwm = GPIO.PWM(Fan.PIN, frequency)
         self.pwm.start(duty_cycle)
 
     def stop(self) -> None:
@@ -784,19 +836,26 @@ class Fan():
 
     def control_loop(self) -> None:
         """Set the desired speed"""
-        self.update_duty_cycle(self.gui.fan_duty_cycle.value())
+        try:
+            self.update_duty_cycle(self.gui.fan_duty_cycle.value())
+        except Exception as e:
+            print(f"Error in fan control loop: {e}")
+            self.gui.show_message("Error in fan control loop",
+                                    "Please restart the program.")
 
 class FiberCamera(QWidget):
     """Proceess video from camera to obtain the fiber diameter and display it"""
     use_binary_for_edges = True
-    def __init__(self) -> None:
+    def __init__(self, target_diameter: QDoubleSpinBox) -> None:
         super().__init__()
         self.raw_image = QLabel()
         self.processed_image = QLabel()
+        self.target_diameter = target_diameter
         self.capture = cv2.VideoCapture(0)
         self.line_value_updated = pyqtSignal(float)  # Create a new signal
         self.diameter_coefficient = Database.get_calibration_data(
             "diameter_coefficient")
+        self.previous_time = 0.0
 
     def camera_loop(self) -> None:
         """Loop to capture and process frames from the camera"""
@@ -804,17 +863,22 @@ class FiberCamera(QWidget):
         assert success, "Failed to capture frame"  # Check if frame is captured
 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # To RGB for GUI
+        height, _, _ = frame.shape
+        frame = frame[height//4:3*height//4, :]  # Keep the middle section
         edges, binary_frame = self.get_edges(frame)
         # Get diameter from the binary image
         # TODO: Tune and set to constants for fiber line detection
-        detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 80,
-                                         minLineLength=60, maxLineGap=10)
+        detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 50,
+                                         minLineLength=80, maxLineGap=20)
         fiber_diameter = self.get_fiber_diameter(detected_lines)
         # Plot lines on the frame
         frame = self.plot_lines(frame, detected_lines)
         # Emit the line_value_updated signal with the new line_value
         #self.line_value_updated.emit(line_value)
+        Database.diameter_delta_time.append(time.time() - self.previous_time)
+        self.previous_time = time.time()
         Database.diameter_readings.append(fiber_diameter)
+        Database.diameter_setpoint.append(self.target_diameter.value())
 
         # Display the frame with lines
         image_for_gui = QImage(frame, frame.shape[1], frame.shape[0],
@@ -828,13 +892,13 @@ class FiberCamera(QWidget):
 
     def get_edges(self, frame: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Filter the frame to enhance the edges"""
-        # Divide the image into 4 horiizontal sections, and keep the middle section
-        height, _, _ = frame.shape
-        frame = frame[height//4:3*height//4, :]  # Keep the middle section
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        gaussian_blurred = cv2.GaussianBlur(gray_frame, (5, 5), 0) 
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)  # Gray
+        kernel = np.ones((5,5), np.uint8)
+        frame = cv2.erode(frame, kernel, iterations=2)
+        frame = cv2.dilate(frame, kernel, iterations=1)
+        gaussian_blurred = cv2.GaussianBlur(frame, (5, 5), 0) 
         threshold_value, binary_frame = cv2.threshold(
-            gaussian_blurred, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            gaussian_blurred, 127, 255, cv2.THRESH_BINARY)
         #print(f'Threshold value: {threshold_value}')
 
         if FiberCamera.use_binary_for_edges is False:
@@ -898,7 +962,7 @@ class FiberCamera(QWidget):
         print(f"Diameter_coeff: {self.diameter_coefficient} mm")
 
         Database.update_calibration_data("diameter_coefficient", 
-                                         self.diameter_coefficient)
+                                         str(self.diameter_coefficient))
 
     def closeEvent(self, event):
         """Close the camera when the window is closed"""
@@ -908,33 +972,47 @@ class FiberCamera(QWidget):
 
 def hardware_control(gui: UserInterface) -> None:
     """Thread to handle hardware control"""
+    time.sleep(1)
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
-    fan = Fan(gui)
-    spooler = Spooler(gui)
-    extruder = Extruder(gui)
-    fan.start(1000, 45)
-    spooler.start(1000, 0)
+    try:
+        fan = Fan(gui)
+        spooler = Spooler(gui)
+        extruder = Extruder(gui)
+        fan.start(1000, 45)
+        spooler.start(1000, 0)
+    except Exception as e:
+        print(f"Error in hardware control: {e}")
+        gui.show_message("Error while starting the device",
+                         "Please restart the program.")
 
     init_time = time.time()
     while True:
-        current_time = time.time() - init_time
-        if gui.start_motor_calibration:
-            spooler.calibrate()
-            gui.start_motor_calibration = False
-        if gui.device_started:
-            extruder.temperature_control_loop(current_time)
-            extruder.stepper_control_loop()
-            if gui.spooling_control_state:
-                spooler.motor_control_loop(current_time)
-            fan.control_loop()
-        time.sleep(0.1)
+        try:
+            current_time = time.time() - init_time
+            Database.time_readings.append(current_time)
+            if gui.start_motor_calibration:
+                spooler.calibrate()
+                gui.start_motor_calibration = False
+            if gui.device_started:
+                extruder.temperature_control_loop(current_time)
+                extruder.stepper_control_loop()
+                if gui.spooling_control_state:
+                    spooler.motor_control_loop(current_time)
+                fan.control_loop()
+            time.sleep(0.05)
+        except Exception as e:
+            print(f"Error in hardware control loop: {e}")
+            gui.show_message("Error in hardware control loop",
+                             "Please restart the program.")
 
 if __name__ == "__main__":
     print("Starting FrED Device...")
     ui = UserInterface()
+    time.sleep(2)
     hardware_thread = threading.Thread(target=hardware_control, args=(ui,))
     hardware_thread.start()
     threading.Lock()
     ui.start_gui()
+    hardware_thread.join()
     print("FrED Device Closed.")
