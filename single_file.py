@@ -6,6 +6,7 @@ import cv2
 import math
 import time
 import yaml
+import csv
 from typing import Tuple
 from typing import Self
 import matplotlib
@@ -45,6 +46,44 @@ class Database():
 
     fan_duty_cycle = []
 
+    @classmethod
+    def generate_csv(cls, filename: str) -> None:
+        """Generate a CSV file with the data"""
+        filename = filename + ".csv"
+        with open(filename, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Time", "Temperature", "Temperature Setpoint",
+                                "Temperature Error", "Temperature PID Output",
+                                "Temperature Kp", "Temperature Ki", "Temperature Kd",
+                                "Extruder RPM", "Diameter", "Diameter Setpoint",
+                                "Spooler Setpoint", "Spooler RPM", "Spooler Gain",
+                                "Spooler Oscillation Period", "Fan Duty Cycle"])
+            for i in enumerate(cls.time_readings):
+                writer.writerow([cls.time_readings[i], cls.temperature_readings[i],
+                                cls.temperature_setpoint[i], cls.temperature_error[i],
+                                cls.temperature_pid_output[i], cls.temperature_kp[i],
+                                cls.temperature_ki[i], cls.temperature_kd[i],
+                                cls.extruder_rpm[i], cls.diameter_readings[i],
+                                cls.diameter_setpoint[i], cls.spooler_setpoint[i],
+                                cls.spooler_rpm[i], cls.spooler_gain[i],
+                                cls.spooler_oscilation_period[i], cls.fan_duty_cycle[i]])
+        print(f"CSV file {filename} generated.")
+
+    @staticmethod
+    def get_calibration_data(field: str) -> float:
+        """Get calibration data from the yaml file"""
+        with open("calibration.yaml", "r", encoding="utf-8") as file:
+            calibration_data = yaml.safe_load(file)
+            return calibration_data[field]
+
+    @staticmethod
+    def update_calibration_data(field: str, value: float) -> None:
+        """Update calibration data in the yaml file"""
+        with open("calibration.yaml", "w") as file:
+            calibration_data = yaml.safe_load(file)
+            calibration_data[field] = value
+            yaml.dump(calibration_data, file)
+
 class UserInterface():
     """"Graphical User Interface Class"""
     def __init__(self) -> None:
@@ -77,6 +116,9 @@ class UserInterface():
         self.start_motor_calibration = False
 
         self.fiber_camera = FiberCamera()
+        if self.fiber_camera.diameter_coefficient == -1:
+            self.show_message("Error", "Camera calibration data not found",
+                              "Please calibrate the camera.")
         self.layout.addWidget(self.fiber_camera.raw_image, 2, 8, 11, 1)
         self.layout.addWidget(self.fiber_camera.processed_image, 13, 8, 11, 1)
 
@@ -338,7 +380,7 @@ class UserInterface():
         """Call download csv from database"""
         QMessageBox.information(self.app.activeWindow(), "Download CSV",
                                 "Downloading CSV file.")
-        #database.download_csv()
+        Database.generate_csv(self.csv_filename.text())
 
     def show_message(self, title: str, message: str) -> None:
         """Show a message box"""
@@ -491,7 +533,7 @@ class Extruder():
         setpoint_rpm = self.gui.extrusion_motor_speed.value()
         delay = (60 / setpoint_rpm / Extruder.STEPS_PER_REVOLUTION /
                  Extruder.FACTOR[Extruder.DEFAULT_MICROSTEPPING])
-        GPIO.output(Extruder.DIRECTION_PIN, GPIO.HIGH)
+        GPIO.output(Extruder.DIRECTION_PIN, 1)
         GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
         time.sleep(delay)
         GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
@@ -552,8 +594,11 @@ class Spooler():
         self.gui = gui
         self.encoder = None
         self.pwm = None
-        self.slope = 0.0
-        self.intercept = 0.0
+        self.slope = Database.get_calibration_data("motor_slope")
+        self.intercept = Database.get_calibration_data("motor_intercept")
+        if self.slope == -1 or self.intercept == -1:
+            self.gui.show_message("Error", "Motor calibration data not found",
+                                    "Please calibrate the motor.")
         GPIO.setup(Spooler.PWM_PIN, GPIO.OUT)
         self.initialize_encoder()
         
@@ -674,7 +719,6 @@ class Spooler():
 
     def calibrate(self) -> None:
         """Calibrate the DC Motor"""
-        # TODO: Finish
         rpm_values = []
         duty_cycles = []
         num_samples = 5 
@@ -688,43 +732,32 @@ class Spooler():
                     # Measure RPM
                     oldtime = time.perf_counter()
                     oldpos = self.encoder.steps
-                    time.sleep(tsample)
+                    time.sleep(Spooler.SAMPLE_TIME)
                     newtime = time.perf_counter()
                     newpos = self.encoder.steps
                     dt = newtime - oldtime
                     ds = newpos - oldpos
-                    rpm = ds / ppr / dt * 60
+                    rpm = ds / Spooler.PULSES_PER_REVOLUTION / dt * 60
                     rpm_samples.append(rpm)
                 avg_rpm = sum(rpm_samples) / num_samples
-                duty_cycles.append(dc)
+                duty_cycles.append(duty_cycle)
                 rpm_values.append(avg_rpm)
-                print(f"Duty Cycle: {dc}% -> Avg RPM: {avg_rpm:.2f}")
+                print(f"Duty Cycle: {duty_cycle}% -> Avg RPM: {avg_rpm:.2f}")
 
             # Fit a curve to the data
             coefficients = np.polyfit(rpm_values, duty_cycles, 1)
             self.slope = coefficients[0]
             self.intercept = coefficients[1]
-
-            # Save the calibration data to a yaml file
-            file_path = "calibration.yaml"
-            with open(file_path, "w") as file:
-                calibration_data = yaml.safe_load(file)
-                calibration_data["motor_slope"] = self.slope
-                calibration_data["motor_intercept"] = self.intercept
-                yaml.dump(calibration_data, file)
+            Database.update_calibration_data("motor_slope", self.slope)
+            Database.update_calibration_data("motor_intercept", self.intercept)
 
         except KeyboardInterrupt:
             print("\nData collection stopped\n\n")
 
-        finally:
-            #gpio_controller.cleanup()
-            #gpio_controller.stop_dc_motor()
-            pass
         self.gui.show_message("Calibration", "Motor calibration completed. "
                                "Please restart the program.")
-        #gpio_controller.cleanup()
         self.stop()
-        self.encoder.steps = 0
+        self.previous_steps = self.encoder.steps
 
 class Fan():
     """Controller for the fan"""
@@ -762,8 +795,8 @@ class FiberCamera(QWidget):
         self.processed_image = QLabel()
         self.capture = cv2.VideoCapture(0)
         self.line_value_updated = pyqtSignal(float)  # Create a new signal
-        # TODO: Get from yaml
-        self.diameter_coefficient = 0.00782324
+        self.diameter_coefficient = Database.get_calibration_data(
+            "diameter_coefficient")
 
     def camera_loop(self) -> None:
         """Loop to capture and process frames from the camera"""
@@ -863,12 +896,9 @@ class FiberCamera(QWidget):
 
         self.diameter_coefficient = 0.45/average_diameter
         print(f"Diameter_coeff: {self.diameter_coefficient} mm")
-       
-        file_path = "calibration.yaml"
-        with open(file_path, encoding="utf-8") as file:
-            calibration_data = yaml.safe_load(file)
-            calibration_data["diameter_coefficient"] = self.diameter_coefficient
-            yaml.dump(calibration_data, file)
+
+        Database.update_calibration_data("diameter_coefficient", 
+                                         self.diameter_coefficient)
 
     def closeEvent(self, event):
         """Close the camera when the window is closed"""
@@ -889,10 +919,15 @@ def hardware_control(gui: UserInterface) -> None:
     init_time = time.time()
     while True:
         current_time = time.time() - init_time
-        extruder.temperature_control_loop(current_time)
-        extruder.stepper_control_loop()
-        spooler.motor_control_loop(current_time)
-        fan.control_loop()
+        if gui.start_motor_calibration:
+            spooler.calibrate()
+            gui.start_motor_calibration = False
+        if gui.device_started:
+            extruder.temperature_control_loop(current_time)
+            extruder.stepper_control_loop()
+            if gui.spooling_control_state:
+                spooler.motor_control_loop(current_time)
+            fan.control_loop()
         time.sleep(0.1)
 
 if __name__ == "__main__":
