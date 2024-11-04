@@ -37,6 +37,7 @@ class Database():
     """Class to store the raw data and generate the CSV file"""
     time_readings = []
 
+    temperature_delta_time = []
     temperature_readings = []
     temperature_setpoint = []
     temperature_error = []
@@ -45,9 +46,12 @@ class Database():
     temperature_ki = []
     temperature_kd = []
     extruder_rpm = []
-
+    
+    diameter_delta_time = []
     diameter_readings = []
     diameter_setpoint = []
+
+    spooler_delta_time = []
     spooler_setpoint = []
     spooler_rpm = []
     spooler_gain = []
@@ -61,21 +65,47 @@ class Database():
         filename = filename + ".csv"
         with open(filename, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            writer.writerow(["Time", "Temperature", "Temperature Setpoint",
-                                "Temperature Error", "Temperature PID Output",
-                                "Temperature Kp", "Temperature Ki", "Temperature Kd",
-                                "Extruder RPM", "Diameter", "Diameter Setpoint",
-                                "Spooler Setpoint", "Spooler RPM", "Spooler Gain",
-                                "Spooler Oscillation Period", "Fan Duty Cycle"])
-            for i in range(len(cls.time_readings)):
-                writer.writerow([cls.time_readings[i], cls.temperature_readings[i],
-                                cls.temperature_setpoint[i], cls.temperature_error[i],
-                                cls.temperature_pid_output[i], cls.temperature_kp[i],
-                                cls.temperature_ki[i], cls.temperature_kd[i],
-                                cls.extruder_rpm[i], cls.diameter_readings[i],
-                                cls.diameter_setpoint[i], cls.spooler_setpoint[i],
-                                cls.spooler_rpm[i], cls.spooler_gain[i],
-                                cls.spooler_oscilation_period[i], cls.fan_duty_cycle[i]])
+            writer.writerow(["Time (s)", "Temperature delta time (s)", 
+                            "Temperature (C)", "Temperature setpoint (C)",
+                            "Temperature error (C)", "Temperature PID output",
+                            "Temperature Kp", "Temperature Ki", "Temperature Kd",
+                            "Extruder RPM", "Diameter delta time (s)",
+                            "Diameter (mm)", "Diameter setpoint (mm)",
+                            "Spooler delta time (s)", "Spooler setpoint (RPM)",
+                            "Spooler RPM", "Spooler gain", "Spooler oscilation period",
+                            "Fan duty cycle (%)"])
+            # Time array is bigger than the rest, make all arrays the same size
+            max_length = max(len(cls.time_readings), len(cls.temperature_delta_time),
+                            len(cls.temperature_readings), len(cls.temperature_setpoint),
+                            len(cls.temperature_error), len(cls.temperature_pid_output),
+                            len(cls.temperature_kp), len(cls.temperature_ki),
+                            len(cls.temperature_kd), len(cls.extruder_rpm),
+                            len(cls.diameter_delta_time), len(cls.diameter_readings),
+                            len(cls.diameter_setpoint), len(cls.spooler_delta_time),
+                            len(cls.spooler_setpoint), len(cls.spooler_rpm),
+                            len(cls.spooler_gain), len(cls.spooler_oscilation_period),
+                            len(cls.fan_duty_cycle))
+            for i in range(max_length):
+                row = [cls.time_readings[i] if i < len(cls.time_readings) else "",
+                       cls.temperature_delta_time[i] if i < len(cls.temperature_delta_time) else "",
+                       cls.temperature_readings[i] if i < len(cls.temperature_readings) else "",
+                       cls.temperature_setpoint[i] if i < len(cls.temperature_setpoint) else "",
+                       cls.temperature_error[i] if i < len(cls.temperature_error) else "",
+                       cls.temperature_pid_output[i] if i < len(cls.temperature_pid_output) else "",
+                       cls.temperature_kp[i] if i < len(cls.temperature_kp) else "",
+                       cls.temperature_ki[i] if i < len(cls.temperature_ki) else "",
+                       cls.temperature_kd[i] if i < len(cls.temperature_kd) else "",
+                       cls.extruder_rpm[i] if i < len(cls.extruder_rpm) else "",
+                       cls.diameter_delta_time[i] if i < len(cls.diameter_delta_time) else "",
+                       cls.diameter_readings[i] if i < len(cls.diameter_readings) else "",
+                       cls.diameter_setpoint[i] if i < len(cls.diameter_setpoint) else "",
+                       cls.spooler_delta_time[i] if i < len(cls.spooler_delta_time) else "",
+                       cls.spooler_setpoint[i] if i < len(cls.spooler_setpoint) else "",
+                       cls.spooler_rpm[i] if i < len(cls.spooler_rpm) else "",
+                       cls.spooler_gain[i] if i < len(cls.spooler_gain) else "",
+                       cls.spooler_oscilation_period[i] if i < len(cls.spooler_oscilation_period) else "",
+                       cls.fan_duty_cycle[i] if i < len(cls.fan_duty_cycle) else ""]
+                writer.writerow(row)
         print(f"CSV file {filename} generated.")
 
     @staticmethod
@@ -125,7 +155,7 @@ class UserInterface():
         self.device_started = False
         self.start_motor_calibration = False
 
-        self.fiber_camera = FiberCamera()
+        self.fiber_camera = FiberCamera(self.target_diameter)
         if self.fiber_camera.diameter_coefficient == -1:
             self.show_message("Camera calibration data not found",
                               "Please calibrate the camera.")
@@ -581,6 +611,7 @@ class Extruder():
                         GPIO.HIGH if output > 0 else GPIO.LOW)
             self.gui.temperature_plot.update_plot(current_time, temperature,
                                                     target_temperature)
+            Database.temperature_delta_time.append(delta_time)
             Database.temperature_setpoint.append(target_temperature)
             Database.temperature_error.append(error)
             Database.temperature_pid_output.append(output)
@@ -726,7 +757,7 @@ class Spooler():
                                                   target_diameter)
 
             # Add data to the database
-            Database.diameter_setpoint.append(target_diameter)
+            Database.spooler_delta_time.append(delta_time)
             Database.spooler_setpoint.append(setpoint_rpm)
             Database.spooler_rpm.append(current_rpm)
             Database.spooler_gain.append(diameter_ku)
@@ -815,14 +846,16 @@ class Fan():
 class FiberCamera(QWidget):
     """Proceess video from camera to obtain the fiber diameter and display it"""
     use_binary_for_edges = True
-    def __init__(self) -> None:
+    def __init__(self, target_diameter: QDoubleSpinBox) -> None:
         super().__init__()
         self.raw_image = QLabel()
         self.processed_image = QLabel()
+        self.target_diameter = target_diameter
         self.capture = cv2.VideoCapture(0)
         self.line_value_updated = pyqtSignal(float)  # Create a new signal
         self.diameter_coefficient = Database.get_calibration_data(
             "diameter_coefficient")
+        self.previous_time = 0.0
 
     def camera_loop(self) -> None:
         """Loop to capture and process frames from the camera"""
@@ -842,7 +875,10 @@ class FiberCamera(QWidget):
         frame = self.plot_lines(frame, detected_lines)
         # Emit the line_value_updated signal with the new line_value
         #self.line_value_updated.emit(line_value)
+        Database.diameter_delta_time.append(time.time() - self.previous_time)
+        self.previous_time = time.time()
         Database.diameter_readings.append(fiber_diameter)
+        Database.diameter_setpoint.append(self.target_diameter.value())
 
         # Display the frame with lines
         image_for_gui = QImage(frame, frame.shape[1], frame.shape[0],
@@ -964,7 +1000,7 @@ def hardware_control(gui: UserInterface) -> None:
                 if gui.spooling_control_state:
                     spooler.motor_control_loop(current_time)
                 fan.control_loop()
-            time.sleep(0.1)
+            time.sleep(0.05)
         except Exception as e:
             print(f"Error in hardware control loop: {e}")
             gui.show_message("Error in hardware control loop",
