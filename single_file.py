@@ -67,7 +67,7 @@ class Database():
                                 "Extruder RPM", "Diameter", "Diameter Setpoint",
                                 "Spooler Setpoint", "Spooler RPM", "Spooler Gain",
                                 "Spooler Oscillation Period", "Fan Duty Cycle"])
-            for i in enumerate(cls.time_readings):
+            for i in range(len(cls.time_readings)):
                 writer.writerow([cls.time_readings[i], cls.temperature_readings[i],
                                 cls.temperature_setpoint[i], cls.temperature_error[i],
                                 cls.temperature_pid_output[i], cls.temperature_kp[i],
@@ -954,6 +954,7 @@ def hardware_control(gui: UserInterface) -> None:
     while True:
         try:
             current_time = time.time() - init_time
+            Database.time_readings.append(current_time)
             if gui.start_motor_calibration:
                 spooler.calibrate()
                 gui.start_motor_calibration = False
