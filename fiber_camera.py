@@ -2,7 +2,11 @@
 import time
 import sys
 import cv2
-from PyQt5.QtWidgets import QWidget, QLabel, QImage, QPixmap, QDoubleSpinBox, QCheckBox, QTimer, QApplication
+import numpy as np
+from typing import Tuple
+from PyQt5.QtWidgets import QWidget, QLabel, QDoubleSpinBox, QCheckBox, QApplication
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
 
 from database import Database
 

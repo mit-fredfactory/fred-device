@@ -8,7 +8,6 @@ from matplotlib.figure import Figure
 
 from database import Database
 from fiber_camera import FiberCamera
-from extruder import Extruder
 
 class UserInterface():
     """"Graphical User Interface Class"""
@@ -82,9 +81,9 @@ class UserInterface():
         target_diameter_label = QLabel("Target Diameter (mm)")
         target_diameter_label.setStyleSheet(font_style % 16)
         target_diameter = QDoubleSpinBox()
-        target_diameter.setMinimum(Extruder.MINIMUM_DIAMETER)
-        target_diameter.setMaximum(Extruder.MAXIMUM_DIAMETER)
-        target_diameter.setValue(Extruder.DEFAULT_DIAMETER)
+        target_diameter.setMinimum(0.3)
+        target_diameter.setMaximum(0.6)
+        target_diameter.setValue(0.35)
         target_diameter.setSingleStep(0.01)
         target_diameter.setDecimals(2)
 
