@@ -373,7 +373,7 @@ class UserInterface():
         """Start the GUI"""
         timer = QTimer()
         timer.timeout.connect(self.fiber_camera.camera_loop)
-        timer.start(100)
+        timer.start(200)
 
         self.window.show()
         self.app.exec_()
