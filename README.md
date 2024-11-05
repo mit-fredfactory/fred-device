@@ -6,7 +6,7 @@ Open a terminal in the Raspberry Pi (`Ctrl + Alt + T`) and type:
 git clone https://github.com/mit-fredfactory/fred-device.git
 cd fred-device
 ```
-You will find multiple files in the folder, go to the [modules](#-modules) section for an overview on each file.
+You will find multiple files in the folder, go to the [modules](#modules) section for an overview on each file.
 
 ### Dependencies
 To make the FrED work, you need to install some libraries in the Raspberry Pi: (@TODO by Edu team)
