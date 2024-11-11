@@ -126,7 +126,7 @@ class Extruder:
             GPIO.output(Extruder.DIRECTION_PIN, 1)
             GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
             time.sleep(delay)
-            GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
+            GPIO.output(Extruder.STEP_PIN, GPIO.LOW)
             time.sleep(delay)
             Database.extruder_rpm.append(setpoint_rpm)
         except Exception as e:
