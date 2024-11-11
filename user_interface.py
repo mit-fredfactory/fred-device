@@ -171,7 +171,7 @@ class UserInterface():
         temperature_kp.setMaximum(2.0)
         temperature_kp.setValue(1.4)
         temperature_kp.setSingleStep(0.1)
-        temperature_kp.setDecimals(1)
+        temperature_kp.setDecimals(5)
 
         temperature_ki_label = QLabel("Temperature Ki")
         temperature_ki_label.setStyleSheet(font_style % 14)
@@ -180,7 +180,7 @@ class UserInterface():
         temperature_ki.setMaximum(2.0)
         temperature_ki.setValue(0.2)
         temperature_ki.setSingleStep(0.1)
-        temperature_ki.setDecimals(1)
+        temperature_ki.setDecimals(5)
 
         temperature_kd_label = QLabel("Temperature Kd")
         temperature_kd_label.setStyleSheet(font_style % 14)
@@ -189,7 +189,7 @@ class UserInterface():
         temperature_kd.setMaximum(2.0)
         temperature_kd.setValue(0.8)
         temperature_kd.setSingleStep(0.1)
-        temperature_kd.setDecimals(1)
+        temperature_kd.setDecimals(5)
 
         self.layout.addWidget(target_temperature_label, 14, 6)
         self.layout.addWidget(target_temperature, 15, 6)
