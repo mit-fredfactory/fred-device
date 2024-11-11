@@ -34,7 +34,7 @@ class UserInterface():
         # Editable text box for the CSV file name
         self.csv_filename = QLineEdit()
         self.csv_filename.setText("Enter a file name")
-        self.layout.addWidget(self.csv_filename, 24, 6)
+        self.layout.addWidget(self.csv_filename, 24, 8)
 
         self.spooling_control_state = False
         self.device_started = False
@@ -242,7 +242,7 @@ class UserInterface():
         self.layout.addWidget(start_device, 1, 0)
         self.layout.addWidget(calibrate_motor, 1, 1)
         self.layout.addWidget(calibrate_camera, 1, 2)
-        self.layout.addWidget(download_csv, 24, 3)
+        self.layout.addWidget(download_csv, 24, 6)
 
     def start_gui(self) -> None:
         """Start the GUI"""
