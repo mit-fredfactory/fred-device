@@ -8,7 +8,7 @@ from matplotlib.figure import Figure
 
 from database import Database
 from fiber_camera import FiberCamera
-
+ 
 class UserInterface():
     """"Graphical User Interface Class"""
     def __init__(self) -> None:
