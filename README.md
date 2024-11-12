@@ -3,13 +3,33 @@ Code for the Fiber Extrusion Device's Raspberry Pi
 ## Setup
 Open a terminal in the Raspberry Pi (`Ctrl + Alt + T`) and type:
 ```bash
-git clone https://github.com/mit-fredfactory/fred-device.git
-cd fred-device
+git clone https://github.com/mit-fredfactory/fred-device.git # This will clone the git folder
+cd fred-device # Gets in the fred-device folder
 ```
 You will find multiple files in the folder, go to the [modules](#modules) section for an overview on each file.
 
+### Virtual environment
+To set up a virtual environment, type:
+```bash
+python3 -m venv --system-site-packages fred-env # Creates a virtaul environment called "fred-env"
+source fred-env/bin/activate # Activates the virtual environment
+# Your virtual environment should appear in parenthesis, for example: "(fred-env) pi@pi"
+```
+
+### Activate Serial Peripheral Interface (SPI)
+To toggle SPI on:
+1. Click the Raspberry Pi logo on the top left corner.
+2. Naviagte to "Preferences", then "Raspberry Configuration".
+3. Click "Interfaces" in the pop-up menu.
+4. Toggle SPI **on**. 
+
 ### Dependencies
 To make the FrED work, you need to install some libraries in the Raspberry Pi: (@TODO by Edu team)
+Install the following libraries:
+```bash
+# pip install is the command to install packages
+pip install opencv-python PyYAML adafruit-blinka adafruit-circuitpython-mcp3xxx RPi.GPIO numpy matplotlib PyQt5 gpiozero
+```
 
 ### Collaborating
 If you wish to collaborate in making this code better first make sure to have a GitHub account, and set it up in the terminal:
