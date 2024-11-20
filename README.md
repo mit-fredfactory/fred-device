@@ -24,8 +24,7 @@ To toggle SPI on:
 4. Toggle SPI **on**. 
 
 ### Dependencies
-To make the FrED work, you need to install some libraries in the Raspberry Pi: (@TODO by Edu team)
-Install the following libraries:
+You will have to install the following libraries in the Raspberry Pi:
 ```bash
 # pip install is the command to install packages
 pip install opencv-python PyYAML adafruit-blinka adafruit-circuitpython-mcp3xxx RPi.GPIO numpy matplotlib PyQt5 gpiozero
