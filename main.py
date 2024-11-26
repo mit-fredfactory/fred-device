@@ -32,7 +32,11 @@ def hardware_control(gui: UserInterface) -> None:
             if gui.start_motor_calibration:
                 spooler.calibrate()
                 gui.start_motor_calibration = False
-            if gui.device_started:
+                
+            if gui.heater_open_loop_enabled:
+                extruder.temperature_open_loop_control(current_time)
+                
+            elif gui.device_started:
                 extruder.temperature_control_loop(current_time)
                 extruder.stepper_control_loop()
                 if gui.spooling_control_state:
