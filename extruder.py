@@ -24,21 +24,27 @@ class Thermistor:
     def get_temperature(cls, voltage: float) -> float:
         """Get the average temperature from the voltage using Steinhart-Hart 
         equation"""
-        resistance = (cls.VOLTAGE_SUPPLY / voltage) * cls.RESISTOR / voltage
-        ln = math.log(resistance / cls.RESISTANCE_AT_REFERENCE)
-        temperature = (1 / ((ln / cls.BETA_COEFFICIENT) +
-                     (1 / cls.REFERENCE_TEMPERATURE))) - 273.15
-        Database.temperature_readings.append(temperature)
-        average_temperature = 0
-        if len(Database.temperature_readings) > cls.READINGS_TO_AVERAGE:
-            # Get last constant readings
-            average_temperature = (sum(Database.temperature_readings
-                                      [-cls.READINGS_TO_AVERAGE:]) /
-                                      cls.READINGS_TO_AVERAGE)
-        else:
-            average_temperature = (sum(Database.temperature_readings) /
-                                   len(Database.temperature_readings))
-        return average_temperature
+        try:
+            resistance = (cls.VOLTAGE_SUPPLY / voltage) * cls.RESISTOR / voltage
+            ln = math.log(resistance / cls.RESISTANCE_AT_REFERENCE)
+            temperature = (1 / ((ln / cls.BETA_COEFFICIENT) +
+                         (1 / cls.REFERENCE_TEMPERATURE))) - 273.15
+            Database.temperature_readings.append(temperature)
+            average_temperature = 0
+            if len(Database.temperature_readings) > cls.READINGS_TO_AVERAGE:
+                # Get last constant readings
+                average_temperature = (sum(Database.temperature_readings
+                                          [-cls.READINGS_TO_AVERAGE:]) /
+                                          cls.READINGS_TO_AVERAGE)
+            else:
+                average_temperature = (sum(Database.temperature_readings) /
+                                       len(Database.temperature_readings))
+            return average_temperature
+        except Exception as e:
+            print("0 division")
+            print("Voltage: ", voltage)
+            print("DB length: ", len(Database.temperature_readings))
+            return 1
 
 class Extruder:
     """Controller of the extrusion process: the heater and stepper motor"""
@@ -75,6 +81,9 @@ class Extruder:
         self.speed = 0.0
         self.duty_cycle = 0.0
         self.channel_0 = None
+        self.cnt = 0
+        self.cnt2 = 0
+        self.initial_state = False
         GPIO.setup(Extruder.HEATER_PIN, GPIO.OUT)
         GPIO.setup(Extruder.DIRECTION_PIN, GPIO.OUT)
         GPIO.setup(Extruder.STEP_PIN, GPIO.OUT)
@@ -167,6 +176,40 @@ class Extruder:
             Database.temperature_kp.append(kp)
             Database.temperature_ki.append(ki)
             Database.temperature_kd.append(kd)
+        except Exception as e:
+            print(f"Error in temperature control loop: {e}")
+            self.gui.show_message("Error", "Error in temperature control loop",
+                                  "Please restart the program.")
+                                  
+    def dumb_temp_control(self, current_time: float) -> None:
+        try:
+            target_temperature = self.gui.target_temperature.value()
+            temperature = Thermistor.get_temperature(self.channel_0.voltage)
+            
+            if temperature > target_temperature - 20:
+                self.initial_state = True
+            
+            if self.initial_state:
+                if temperature < target_temperature - 0.4:
+                    if self.cnt >= 1:
+                        output = Extruder.MIN_OUTPUT
+                        self.cnt2 += 1
+                        if self.cnt2 >= 10:
+                            self.cnt = 0
+                            self.cnt2 = 0
+                    else:
+                        output = Extruder.MAX_OUTPUT
+                        self.cnt += 1
+                elif temperature > target_temperature - 0.5:
+                    output = Extruder.MIN_OUTPUT
+            else:
+                output = Extruder.MAX_OUTPUT
+                
+            print("GPIO output: ", output)
+            GPIO.output(Extruder.HEATER_PIN, GPIO.HIGH if output > 0 else GPIO.LOW)
+            self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
+            Database.temperature_setpoint.append(target_temperature)
+
         except Exception as e:
             print(f"Error in temperature control loop: {e}")
             self.gui.show_message("Error", "Error in temperature control loop",

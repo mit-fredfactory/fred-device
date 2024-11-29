@@ -318,6 +318,7 @@ class UserInterface():
             self.setpoint_line, = self.axes.plot([], [], lw=2, color='r',
                                                  label=f'Target {title}')
             self.axes.legend()
+            self.axes.grid(axis = 'y')
 
             self.x_data = []
             self.y_data = []
