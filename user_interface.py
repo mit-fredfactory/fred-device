@@ -168,7 +168,7 @@ class UserInterface():
         temperature_kp_label.setStyleSheet(font_style % 14)
         temperature_kp = QDoubleSpinBox()
         temperature_kp.setMinimum(0.0)
-        temperature_kp.setMaximum(2.0)
+        temperature_kp.setMaximum(10.0)
         temperature_kp.setValue(1.4)
         temperature_kp.setSingleStep(0.1)
         temperature_kp.setDecimals(5)
@@ -178,7 +178,7 @@ class UserInterface():
         temperature_ki = QDoubleSpinBox()
         temperature_ki.setMinimum(0.0)
         temperature_ki.setMaximum(2.0)
-        temperature_ki.setValue(0.2)
+        temperature_ki.setValue(0)
         temperature_ki.setSingleStep(0.1)
         temperature_ki.setDecimals(5)
 
@@ -187,7 +187,7 @@ class UserInterface():
         temperature_kd = QDoubleSpinBox()
         temperature_kd.setMinimum(0.0)
         temperature_kd.setMaximum(2.0)
-        temperature_kd.setValue(0.8)
+        temperature_kd.setValue(0)
         temperature_kd.setSingleStep(0.1)
         temperature_kd.setDecimals(5)
 
