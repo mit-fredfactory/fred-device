@@ -197,7 +197,7 @@ class Extruder:
     def PWM_temperature_control(self, current_time: float) -> float:
         try:
             kp = self.gui.temperature_kp.value()
-            ki = self.gui.temperature_ki.value()
+            ki = self.gui.temperature_ki.value()/100
             kd = self.gui.temperature_kd.value()
             
             delta_time = current_time - self.previous_time

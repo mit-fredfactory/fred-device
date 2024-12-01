@@ -55,10 +55,11 @@ def hardware_control(gui: UserInterface) -> None:
                 
                 
                 if gui.spooling_control_state:
-                    # spooler.motor_control_loop(current_time)
-                    extruder.turnOFFbaby()
+                    spooler.motor_control_loop(current_time)
                 fan.control_loop()
-            # time.sleep(0.05)
+            else:
+                extruder.turnOFFpapi()
+                time.sleep(0.05)
         except Exception as e:
             print(f"Error in hardware control loop: {e}")
             gui.show_message("Error in hardware control loop",
