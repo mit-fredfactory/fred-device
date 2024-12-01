@@ -10,6 +10,18 @@ from adafruit_mcp3xxx.analog_in import AnalogIn
 
 from database import Database
 from user_interface import UserInterface
+from collections import deque
+
+class CircularBuffer:
+    def __init__(self, size):
+        self.size = size
+        self.buffer = deque(maxlen = size)
+        
+    def add(self, item):
+        self.buffer.append(item)
+        
+    def get_all(self):
+        return list(self.buffer)
 
 class Thermistor:
     """Constants and util functions for the thermistor"""
@@ -83,6 +95,7 @@ class Extruder:
         self.channel_0 = None
         self.cnt = 0
         self.cnt2 = 0
+        self.buffer = CircularBuffer(8)
         self.initial_state = False
         GPIO.setup(Extruder.HEATER_PIN, GPIO.OUT)
         GPIO.setup(Extruder.DIRECTION_PIN, GPIO.OUT)
@@ -166,8 +179,7 @@ class Extruder:
                 output = Extruder.MAX_OUTPUT
             elif output < Extruder.MIN_OUTPUT:
                 output = Extruder.MIN_OUTPUT
-                    
-            print(output)
+                
             GPIO.output(Extruder.HEATER_PIN, GPIO.HIGH if output > 0 else GPIO.LOW)
             self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
             Database.temperature_delta_time.append(delta_time)
@@ -181,66 +193,48 @@ class Extruder:
             print(f"Error in temperature control loop: {e}")
             self.gui.show_message("Error", "Error in temperature control loop",
                                   "Please restart the program.")
+
+    def PWM_temperature_control(self, current_time: float) -> float:
+        try:
+            kp = self.gui.temperature_kp.value()
+            ki = self.gui.temperature_ki.value()
+            kd = self.gui.temperature_kd.value()
+            
+            delta_time = current_time - self.previous_time
+            self.previous_time = current_time
+            
+            target_temp = self.gui.target_temperature.value()
+            temp = Thermistor.get_temperature(self.channel_0.voltage)
         
-    def dumb_temp_control(self, current_time: float) -> None:
-        try:
-            target_temperature = self.gui.target_temperature.value()
-            temperature = Thermistor.get_temperature(self.channel_0.voltage)
+            # Average of temperature readings
+            self.buffer.add(temp)
+            avg_temp = sum(self.buffer.get_all())/len(self.buffer.get_all())
+        
             
-            if temperature > target_temperature - 20:
-                self.initial_state = True
-            
-            if self.initial_state:
-                if temperature < target_temperature - 0.4:
-                    if self.cnt >= 2:
-                        output = Extruder.MIN_OUTPUT
-                        self.cnt2 += 1
-                        if self.cnt2 >= 15:
-                            self.cnt = 0
-                            self.cnt2 = 0
-                    else:
-                        output = Extruder.MAX_OUTPUT
-                        self.cnt += 1
-                elif temperature > target_temperature - 0.5:
-                    output = Extruder.MIN_OUTPUT
-            else:
-                output = Extruder.MAX_OUTPUT
+            error = avg_temp - target_temp
                 
-            print("GPIO output: ", output)
-            GPIO.output(Extruder.HEATER_PIN, GPIO.HIGH if output > 0 else GPIO.LOW)
-            self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
-            Database.temperature_setpoint.append(target_temperature)
+            self.integral += error * delta_time
+            
+            derivative = (error - self.previous_error) / delta_time
+            self.previous_error = error
+            output = kp * error + ki * self.integral + kd * derivative
 
-        except Exception as e:
-            print(f"Error in temperature control loop: {e}")
-            self.gui.show_message("Error", "Error in temperature control loop",
-                                  "Please restart the program.")
-
-    def PWM_temperature_control(self, current_time: float) -> None:
-        try:
-            target_temperature = self.gui.target_temperature.value()
-            temperature = Thermistor.get_temperature(self.channel_0.voltage)
-
-            output = - (temperature - target_temperature)/target_temperature * 100
-            print("O", output)
+            out = -output//10 / 10
+            if out > 1: out = 1
+            # out += 0.5
+            
+            
+            self.gui.temperature_plot.update_plot(current_time, avg_temp, target_temp)
+            return out
  
-            if output > Extruder.MAX_OUTPUT:
-                output = Extruder.MAX_OUTPUT
-            elif output < Extruder.MIN_OUTPUT:
-                output = Extruder.MIN_OUTPUT
-                    
-            print("GPIO", output)
-            GPIO.output(Extruder.HEATER_PIN, GPIO.HIGH if output > 0 else GPIO.LOW)
-            self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
+            
         except Exception as e:
-            print(f"Error in temperature control loop: {e}")
-            self.gui.show_message("Error", "Error in temperature control loop",
+            print(f"Error in PWM temperature control loop: {e}")
+            self.gui.show_message("Error", "Error in PWM temperature control loop",
                                   "Please restart the program.")
                                   
-    def PWM(self):
-        return
-                                  
-    def turnONbaby(self, current_time: float) -> None:
+    def turnONbaby(self) -> None:
         GPIO.output(Extruder.HEATER_PIN, GPIO.HIGH)
-        temperature = Thermistor.get_temperature(self.channel_0.voltage)
-        self.gui.temperature_plot.update_plot(current_time, temperature, 0)
+        
+    def turnOFFpapi(self) -> None:
+        GPIO.output(Extruder.HEATER_PIN, GPIO.LOW)

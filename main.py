@@ -7,6 +7,7 @@ from user_interface import UserInterface
 from fan import Fan
 from spooler import Spooler
 from extruder import Extruder
+import math
 
 def hardware_control(gui: UserInterface) -> None:
     """Thread to handle hardware control"""
@@ -34,14 +35,30 @@ def hardware_control(gui: UserInterface) -> None:
                 gui.start_motor_calibration = False
             if gui.device_started:
                 # extruder.temperature_control_loop(current_time)
-                # extruder.dumb_temp_control(current_time)
-                extruder.PWM_temperature_control(current_time)
-                # extruder.turnONbaby(current_time)
                 extruder.stepper_control_loop()
+                
+                duty_cycle = extruder.PWM_temperature_control(current_time)
+                
+                period = 10
+                ON_time = math.ceil(period/2*duty_cycle+period/2)
+                OFF_time = period - ON_time
+                
+                print("ON time: ", ON_time)
+                print("OFF time: ", OFF_time)
+                
+                for i in range(ON_time):
+                    extruder.turnONbaby()
+                    time.sleep(0.01)
+                for i in range(OFF_time):
+                    extruder.turnOFFpapi()
+                    time.sleep(0.01)
+                
+                
                 if gui.spooling_control_state:
-                    spooler.motor_control_loop(current_time)
+                    # spooler.motor_control_loop(current_time)
+                    extruder.turnOFFbaby()
                 fan.control_loop()
-            time.sleep(0.025)
+            # time.sleep(0.05)
         except Exception as e:
             print(f"Error in hardware control loop: {e}")
             gui.show_message("Error in hardware control loop",
