@@ -5,9 +5,22 @@ from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap, QImage
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 
 from database import Database
 from fiber_camera import FiberCamera
+from collections import deque
+
+class CircularBuffer:
+    def __init__(self, size):
+        self.size = size
+        self.buffer = deque(maxlen = size)
+        
+    def add(self, item):
+        self.buffer.append(item)
+        
+    def get_all(self):
+        return list(self.buffer)
  
 class UserInterface():
     """"Graphical User Interface Class"""
@@ -63,9 +76,9 @@ class UserInterface():
         binary_checkbox.setStyleSheet(font_style)
         #binary_checkbox.stateChanged.connect(checkbox_state_changed) TODO
 
-        motor_plot = self.Plot("DC Spooling Motor", "Speed (RPM)")
-        temperature_plot = self.Plot("Temperature", "Temperature (C)")
-        diameter_plot = self.Plot("Diameter", "Diameter (mm)")
+        motor_plot = self.Plot("DC Spooling Motor", "Speed (RPM)", False)
+        temperature_plot = self.Plot("Temperature", "Temperature (C)", False)
+        diameter_plot = self.Plot("Diameter", "Diameter (mm)", True)
 
         self.layout.addWidget(binary_checkbox, 10, 1)
         self.layout.addWidget(diameter_plot, 2, 0, 8, 4)
@@ -78,11 +91,11 @@ class UserInterface():
                                              QDoubleSpinBox]:
         """Add UI spin boxes to control the diameter"""
         font_style = "font-size: %ipx; font-weight: bold;"
-        target_diameter_label = QLabel("Target Diameter (mm)")
+        target_diameter_label = QLabel("Target Diameter (px)")
         target_diameter_label.setStyleSheet(font_style % 16)
         target_diameter = QDoubleSpinBox()
         target_diameter.setMinimum(0.3)
-        target_diameter.setMaximum(0.6)
+        target_diameter.setMaximum(100)
         target_diameter.setValue(0.35)
         target_diameter.setSingleStep(0.01)
         target_diameter.setDecimals(2)
@@ -92,7 +105,7 @@ class UserInterface():
         diameter_gain = QDoubleSpinBox()
         diameter_gain.setMinimum(0.1)
         diameter_gain.setMaximum(2)
-        diameter_gain.setValue(1.2)
+        diameter_gain.setValue(23)
         diameter_gain.setSingleStep(0.1)
         diameter_gain.setDecimals(1)
 
@@ -216,7 +229,6 @@ class UserInterface():
 
         self.layout.addWidget(fan_duty_cycle_label, 22, 6)
         self.layout.addWidget(fan_duty_cycle, 23, 6)
-
         return fan_duty_cycle_label, fan_duty_cycle
 
     def add_buttons(self):
@@ -304,12 +316,12 @@ class UserInterface():
 
     class Plot(FigureCanvas):
         """Base class for plots"""
-        def __init__(self, title: str, y_label: str) -> None:
-            # self.UCL_value = 0.5
-            # self.LCL_value = -0.5
-            # self.CL_value = 0
+        def __init__(self, title: str, y_label: str, on: bool) -> None:
             self.figure = Figure()
             self.axes = self.figure.add_subplot(111)
+            self.on = on
+            self.buffer = CircularBuffer(15)
+            self.error = []
             # 1x1 grid, first subplot: https://stackoverflow.com/a/46986694
             super(UserInterface.Plot, self).__init__(self.figure)
 
@@ -317,10 +329,11 @@ class UserInterface():
             self.axes.set_xlabel("Time (s)")
             self.axes.set_ylabel(y_label)
 
-
-            # self.UCL_line = self.axes.plot([], [], lw=2, color='b', linestyle = '--')
-            # self.LCL_line = self.axes.plot([], [], lw=2, color='b', linestyle = '--')
-            # self.CL_line = self.axes.plot([], [], lw=2, color='b', linestyle = '--')
+            if self.on:
+                self.UCL_line, = self.axes.plot([], [], lw=2, color='k', linestyle = '--')
+                self.LCL_line, = self.axes.plot([], [], lw=2, color='k', linestyle = '--')
+                self.UCL = []
+                self.LCL = []
             self.progress_line, = self.axes.plot([], [], lw=2, label=title)
             self.setpoint_line, = self.axes.plot([], [], lw=2, color='r',
                                                  label=f'Target {title}')
@@ -330,24 +343,65 @@ class UserInterface():
             self.x_data = []
             self.y_data = []
             self.setpoint_data = []
-            # self.UCL = []
-            # self.LCL = []
-            # self.CL = []
+                
 
         def update_plot(self, x: float, y: float, setpoint: float) -> None:
             """Update the plot"""
             self.x_data.append(x)
             self.y_data.append(y)
             self.setpoint_data.append(setpoint)
-            # self.UCL.append(self.UCL_value)
-            # self.LCL.append(self.LCL_value)
-            # self.CL.append(self.CL_value)
+            self.sigma = 3
+            
+            if self.on:
+                self.buffer.add(y)
+                buf = self.buffer.get_all()
+                buf_len = len(buf)
+                
+                self.UCL.append(setpoint + self.sigma * 3)
+                self.LCL.append(setpoint - self.sigma * 3)
+                
+                self.error.append(y - setpoint)
+                
+            # WECO Rules
+            if self.on:
+                bad_point = False
+                self.UCL_line.set_data(self.x_data, self.UCL)
+                self.LCL_line.set_data(self.x_data, self.LCL)
+                
+                # Rule 1
+                if y > self.UCL[-1] or y < self.LCL[-1]: bad_point = True
+                
+                # Rule 2
+                if buf_len > 2:
+                    n_1 = 0; n_2 = 0
+                    for val in self.error[-3:]:
+                        if val > self.sigma * 2: n_1 += 1
+                        elif val < -self.sigma * 2: n_2 += 1
+                    if n_1 >= 2 or n_2 >= 2: bad_point = True
+                    
+                # Rule 3
+                if buf_len > 4:
+                    n_1 = 0; n_2 = 0
+                    for val in self.error[-5:]:
+                        if val > self.sigma: n_1 += 1
+                        elif val < -self.sigma: n_2 += 1
+                    if n_1 >= 4 or n_2 >= 4: bad_point = True
+                
+                # Rule 4
+                if buf_len > 8:
+                    n_1 = 0; n_2 = 0
+                    for val in self.error[-9:]:
+                        if val > 0: n_1 += 1
+                        elif val < 0: n_2 += 1
+                    if n_1 == 9 or n_2 == 9: bad_point = True
+                    
+
+                if bad_point:
+                    self.axes.scatter(x, y, marker = 'x', color = 'r')
 
             self.progress_line.set_data(self.x_data, self.y_data)
             self.setpoint_line.set_data(self.x_data, self.setpoint_data)
-            # self.UCL_line.set_data(self.x_data, self.UCL)
-            # self.LCL_line.set_data(self.x_data, self.LCL)
-            # self.CL_line.set_data(self.x_data, self.CL)
+                
 
             self.axes.relim()
             self.axes.autoscale_view()
