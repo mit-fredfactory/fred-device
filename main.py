@@ -1,4 +1,6 @@
 """Main file to run the FrED device"""
+""" https://drive.google.com/drive/folders/18odhWyNApQg9eVLjScSApWUiiRCTNP79?usp=sharing """
+
 import threading
 import time
 import RPi.GPIO as GPIO
@@ -34,8 +36,7 @@ def hardware_control(gui: UserInterface) -> None:
                 spooler.calibrate()
                 gui.start_motor_calibration = False
             if gui.device_started:
-                # extruder.temperature_control_loop(current_time)
-                extruder.stepper_control_loop()
+                RPM = extruder.stepper_control_loop()
                 
                 duty_cycle = extruder.PWM_temperature_control(current_time)
                 
@@ -47,18 +48,18 @@ def hardware_control(gui: UserInterface) -> None:
                 print("OFF time: ", OFF_time)
                 
                 for i in range(ON_time):
-                    extruder.turnONbaby()
+                    extruder.turnON()
                     time.sleep(0.01)
                 for i in range(OFF_time):
-                    extruder.turnOFFpapi()
+                    extruder.turnOFF()
                     time.sleep(0.01)
                 
                 
                 if gui.spooling_control_state:
-                    spooler.motor_control_loop(current_time)
+                    spooler.motor_speed(RPM)
                 fan.control_loop()
             else:
-                extruder.turnOFFpapi()
+                extruder.turnOFF()
                 time.sleep(0.05)
         except Exception as e:
             print(f"Error in hardware control loop: {e}")

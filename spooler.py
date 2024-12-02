@@ -77,6 +77,12 @@ class Spooler:
     def rpm_to_duty_cycle(self, rpm: float) -> float:
         """Convert the RPM to duty cycle"""
         return self.slope * rpm + self.intercept
+        
+    def motor_speed(self, RPM: float) -> None:
+        RPM_scaled = RPM * 5.5 * (3.5 ** 2) / ((0.25 ** 2) * 7.5)
+        output_duty_cycle = self.rpm_to_duty_cycle(RPM_scaled) 
+        output_duty_cycle = max(min(output_duty_cycle, 100), 0)
+        self.update_duty_cycle(output_duty_cycle)
 
     def motor_control_loop(self, current_time: float) -> None:
         """Closed loop control of the DC motor for desired diameter"""

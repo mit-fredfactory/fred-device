@@ -91,12 +91,8 @@ class Extruder:
     def __init__(self, gui: UserInterface) -> None:
         self.gui = gui
         self.speed = 0.0
-        self.duty_cycle = 0.0
         self.channel_0 = None
-        self.cnt = 0
-        self.cnt2 = 0
         self.buffer = CircularBuffer(8)
-        self.initial_state = False
         GPIO.setup(Extruder.HEATER_PIN, GPIO.OUT)
         GPIO.setup(Extruder.DIRECTION_PIN, GPIO.OUT)
         GPIO.setup(Extruder.STEP_PIN, GPIO.OUT)
@@ -139,7 +135,7 @@ class Extruder:
         """Step the motor in the given direction"""
         GPIO.output(Extruder.DIRECTION_PIN, direction)
 
-    def stepper_control_loop(self) -> None:
+    def stepper_control_loop(self) -> float:
         """Move the stepper motor constantly"""
         try:
             setpoint_rpm = self.gui.extrusion_motor_speed.value()
@@ -151,53 +147,16 @@ class Extruder:
             GPIO.output(Extruder.STEP_PIN, GPIO.LOW)
             time.sleep(delay)
             Database.extruder_rpm.append(setpoint_rpm)
+            return setpoint_rpm
         except Exception as e:
             print(f"Error in stepper control loop: {e}")
             self.gui.show_message("Error in stepper control loop",
                                     "Please restart the program.")
 
-    def temperature_control_loop(self, current_time: float) -> None:
-        """Closed loop control of the temperature of the extruder for desired diameter"""
-        if current_time - self.previous_time <= Extruder.SAMPLE_TIME:
-            return
-        try:
-            target_temperature = self.gui.target_temperature.value()
-            kp = self.gui.temperature_kp.value()
-            ki = self.gui.temperature_ki.value()
-            kd = self.gui.temperature_kd.value()
-            
-            delta_time = current_time - self.previous_time
-            self.previous_time = current_time
-            temperature = Thermistor.get_temperature(self.channel_0.voltage)
-            error = target_temperature - temperature
-            self.integral += error * delta_time
-            derivative = (error - self.previous_error) / delta_time
-            self.previous_error = error
-            output = kp * error + ki * self.integral + kd * derivative
- 
-            if output > Extruder.MAX_OUTPUT:
-                output = Extruder.MAX_OUTPUT
-            elif output < Extruder.MIN_OUTPUT:
-                output = Extruder.MIN_OUTPUT
-                
-            GPIO.output(Extruder.HEATER_PIN, GPIO.HIGH if output > 0 else GPIO.LOW)
-            self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
-            Database.temperature_delta_time.append(delta_time)
-            Database.temperature_setpoint.append(target_temperature)
-            Database.temperature_error.append(error)
-            Database.temperature_pid_output.append(output)
-            Database.temperature_kp.append(kp)
-            Database.temperature_ki.append(ki)
-            Database.temperature_kd.append(kd)
-        except Exception as e:
-            print(f"Error in temperature control loop: {e}")
-            self.gui.show_message("Error", "Error in temperature control loop",
-                                  "Please restart the program.")
-
     def PWM_temperature_control(self, current_time: float) -> float:
         try:
             kp = self.gui.temperature_kp.value()
-            ki = self.gui.temperature_ki.value()/100
+            ki = self.gui.temperature_ki.value() / 100
             kd = self.gui.temperature_kd.value()
             
             delta_time = current_time - self.previous_time
@@ -221,7 +180,6 @@ class Extruder:
 
             out = -output//10 / 10
             if out > 1: out = 1
-            # out += 0.5
             
             
             self.gui.temperature_plot.update_plot(current_time, avg_temp, target_temp)
@@ -233,8 +191,8 @@ class Extruder:
             self.gui.show_message("Error", "Error in PWM temperature control loop",
                                   "Please restart the program.")
                                   
-    def turnONbaby(self) -> None:
+    def turnON(self) -> None:
         GPIO.output(Extruder.HEATER_PIN, GPIO.HIGH)
         
-    def turnOFFpapi(self) -> None:
+    def turnOFF(self) -> None:
         GPIO.output(Extruder.HEATER_PIN, GPIO.LOW)

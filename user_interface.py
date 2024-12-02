@@ -140,7 +140,7 @@ class UserInterface():
         extrusion_motor_speed = QDoubleSpinBox()
         extrusion_motor_speed.setMinimum(0.0)
         extrusion_motor_speed.setMaximum(2.0)
-        extrusion_motor_speed.setValue(1.2)
+        extrusion_motor_speed.setValue(0.3)
         extrusion_motor_speed.setSingleStep(0.1)
         extrusion_motor_speed.setDecimals(1)
 
@@ -168,8 +168,8 @@ class UserInterface():
         temperature_kp_label.setStyleSheet(font_style % 14)
         temperature_kp = QDoubleSpinBox()
         temperature_kp.setMinimum(0.0)
-        temperature_kp.setMaximum(10.0)
-        temperature_kp.setValue(5.2)
+        temperature_kp.setMaximum(1000.0)
+        temperature_kp.setValue(10)
         temperature_kp.setSingleStep(0.1)
         temperature_kp.setDecimals(5)
 
@@ -177,8 +177,8 @@ class UserInterface():
         temperature_ki_label.setStyleSheet(font_style % 14)
         temperature_ki = QDoubleSpinBox()
         temperature_ki.setMinimum(0.0)
-        temperature_ki.setMaximum(2.0)
-        temperature_ki.setValue(1.3)
+        temperature_ki.setMaximum(1000.0)
+        temperature_ki.setValue(50)
         temperature_ki.setSingleStep(0.1)
         temperature_ki.setDecimals(5)
 
@@ -186,8 +186,8 @@ class UserInterface():
         temperature_kd_label.setStyleSheet(font_style % 14)
         temperature_kd = QDoubleSpinBox()
         temperature_kd.setMinimum(0.0)
-        temperature_kd.setMaximum(2.0)
-        temperature_kd.setValue(0)
+        temperature_kd.setMaximum(1000.0)
+        temperature_kd.setValue(20)
         temperature_kd.setSingleStep(0.1)
         temperature_kd.setDecimals(5)
 
@@ -211,7 +211,7 @@ class UserInterface():
         fan_duty_cycle = QSlider(Qt.Horizontal)
         fan_duty_cycle.setMinimum(0)
         fan_duty_cycle.setMaximum(100)
-        fan_duty_cycle.setValue(30)
+        fan_duty_cycle.setValue(20)
         fan_duty_cycle.valueChanged.connect(self.update_fan_slider_label)
 
         self.layout.addWidget(fan_duty_cycle_label, 22, 6)
@@ -305,6 +305,9 @@ class UserInterface():
     class Plot(FigureCanvas):
         """Base class for plots"""
         def __init__(self, title: str, y_label: str) -> None:
+            # self.UCL_value = 0.5
+            # self.LCL_value = -0.5
+            # self.CL_value = 0
             self.figure = Figure()
             self.axes = self.figure.add_subplot(111)
             # 1x1 grid, first subplot: https://stackoverflow.com/a/46986694
@@ -314,6 +317,10 @@ class UserInterface():
             self.axes.set_xlabel("Time (s)")
             self.axes.set_ylabel(y_label)
 
+
+            # self.UCL_line = self.axes.plot([], [], lw=2, color='b', linestyle = '--')
+            # self.LCL_line = self.axes.plot([], [], lw=2, color='b', linestyle = '--')
+            # self.CL_line = self.axes.plot([], [], lw=2, color='b', linestyle = '--')
             self.progress_line, = self.axes.plot([], [], lw=2, label=title)
             self.setpoint_line, = self.axes.plot([], [], lw=2, color='r',
                                                  label=f'Target {title}')
@@ -323,15 +330,24 @@ class UserInterface():
             self.x_data = []
             self.y_data = []
             self.setpoint_data = []
+            # self.UCL = []
+            # self.LCL = []
+            # self.CL = []
 
         def update_plot(self, x: float, y: float, setpoint: float) -> None:
             """Update the plot"""
             self.x_data.append(x)
             self.y_data.append(y)
             self.setpoint_data.append(setpoint)
+            # self.UCL.append(self.UCL_value)
+            # self.LCL.append(self.LCL_value)
+            # self.CL.append(self.CL_value)
 
             self.progress_line.set_data(self.x_data, self.y_data)
             self.setpoint_line.set_data(self.x_data, self.setpoint_data)
+            # self.UCL_line.set_data(self.x_data, self.UCL)
+            # self.LCL_line.set_data(self.x_data, self.LCL)
+            # self.CL_line.set_data(self.x_data, self.CL)
 
             self.axes.relim()
             self.axes.autoscale_view()
