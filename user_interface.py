@@ -362,7 +362,7 @@ class UserInterface():
                 
                 self.error.append(y - setpoint)
                 
-            # WECO Rules
+            # WECO/Nelson Rules
             if self.on:
                 bad_point = False
                 self.UCL_line.set_data(self.x_data, self.UCL)
@@ -370,8 +370,32 @@ class UserInterface():
                 
                 # Rule 1
                 if y > self.UCL[-1] or y < self.LCL[-1]: bad_point = True
-                
+
                 # Rule 2
+                if buf_len > 8:
+                    n_1 = 0; n_2 = 0
+                    for val in self.error[-9:]:
+                        if val > 0: n_1 += 1
+                        elif val < 0: n_2 += 1
+                    if n_1 == 9 or n_2 == 9: bad_point = True
+
+                # Rule 3 NEW
+                if buf_len > 5:
+                    n_1 = 0; n_2 = 0; valold = 0
+                    for i in range(1, len(self.error[-6]):
+                        if self.error[i] > self.error[i-1]: n_1 += 1
+                        elif self.error[i] < self.error[i-1]: n_2 += 1
+                    if  n_1 == 5 or n_2 == 5: bad_point = True
+
+                # Rule 4 NEW
+                if buf_len > 13:
+                    n_1 = 0;
+                    for i in range(1, len(self.error[-14]):
+                        if (self.error[i] > self.error[i-1] and self.error[i-1] < self.error[i-2]) or (self.error[i] < self.error[i-1] and self.error[i-1] > self.error[i-2]):
+                            n_1 += 1
+                    if  n_1 == 13: bad_point = True
+                
+                # Rule 5
                 if buf_len > 2:
                     n_1 = 0; n_2 = 0
                     for val in self.error[-3:]:
@@ -379,23 +403,29 @@ class UserInterface():
                         elif val < -self.sigma * 2: n_2 += 1
                     if n_1 >= 2 or n_2 >= 2: bad_point = True
                     
-                # Rule 3
+                # Rule 6
                 if buf_len > 4:
                     n_1 = 0; n_2 = 0
                     for val in self.error[-5:]:
                         if val > self.sigma: n_1 += 1
                         elif val < -self.sigma: n_2 += 1
                     if n_1 >= 4 or n_2 >= 4: bad_point = True
-                
-                # Rule 4
-                if buf_len > 8:
-                    n_1 = 0; n_2 = 0
-                    for val in self.error[-9:]:
-                        if val > 0: n_1 += 1
-                        elif val < 0: n_2 += 1
-                    if n_1 == 9 or n_2 == 9: bad_point = True
-                    
 
+                # Rule 7 NEW
+                if buf_len > 14:
+                    n_1 = 0;
+                    for val in self.error[-15:]:
+                        if -self.sigma < val < self.sigma: n_1 += 1
+                    if n_1 == 15: bad_point = True
+
+                 # Rule 8 NEW
+                if buf_len > 7:
+                    n_1 = 0; n_2 = 0
+                    for val in self.error[-8:]:
+                        if val > self.sigma: n_1 += 1
+                        elif val < -self.sigma: n_2 += 1
+                    if n_1 >= 1 and n_2 >= 1 and n_1 + n_2 == 8: bad_point = True
+                    
                 if bad_point:
                     self.axes.scatter(x, y, marker = 'x', color = 'r')
 
