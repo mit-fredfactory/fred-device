@@ -30,6 +30,9 @@ class UserInterface():
             = self.add_temperature_controls()
 
         self.fan_duty_cycle_label, self.fan_duty_cycle = self.add_fan_controls()
+        
+        self.temperature_step_label, self.temperature_step = self.add_temperature_step_control() #NEWW
+
 
         # Editable text box for the CSV file name
         self.csv_filename = QLineEdit()
@@ -39,6 +42,7 @@ class UserInterface():
         self.spooling_control_state = False
         self.device_started = False
         self.start_motor_calibration = False
+        self.heater_open_loop_enabled = False #NEw
 
         self.fiber_camera = FiberCamera(self.target_diameter)
         if self.fiber_camera.diameter_coefficient == -1:
@@ -218,31 +222,64 @@ class UserInterface():
         self.layout.addWidget(fan_duty_cycle, 23, 6)
 
         return fan_duty_cycle_label, fan_duty_cycle
+    
+    def add_temperature_step_control(self) -> Tuple[QLabel, QSlider]:
+        """Add UI controls for the temperature step"""
+        font_style = "font-size: %ipx; font-weight: bold;"
+        
+        temperature_step_label = QLabel("Heater PWM (%)")
+        temperature_step_label.setStyleSheet(font_style % 14)
+        
+        temperature_step = QSlider(Qt.Horizontal)
+        temperature_step.setMinimum(0)    # 0% duty cycle
+        temperature_step.setMaximum(100)  # 100% duty cycle
+        temperature_step.setValue(0)      # Valor inicial
+        temperature_step.valueChanged.connect(self.update_temperature_step_label)
+        
+        self.layout.addWidget(temperature_step_label, 3, 9)
+        self.layout.addWidget(temperature_step, 4, 9)
+        
+        return temperature_step_label, temperature_step
+
+    def update_temperature_step_label(self, value) -> None:
+        """Update the temperature step slider label"""
+        self.temperature_step_label.setText(f"Heater PWM: {value}%")
 
     def add_buttons(self):
         """Add buttons to the layout"""
         font_style = "background-color: green; font-size: 14px; font-weight: bold;"
+        
         spooling_control = QPushButton("Start/stop spooling close loop control")
         spooling_control.setStyleSheet(font_style)
         spooling_control.clicked.connect(self.spooling_control_toggle)
+        
         start_device = QPushButton("Start device")
         start_device.setStyleSheet(font_style)
         start_device.clicked.connect(self.set_start_device)
+        
         calibrate_motor = QPushButton("Calibrate motor")
         calibrate_motor.setStyleSheet(font_style)
         calibrate_motor.clicked.connect(self.set_calibrate_motor)
+        
         calibrate_camera = QPushButton("Calibrate camera")
         calibrate_camera.setStyleSheet(font_style)
         calibrate_camera.clicked.connect(self.set_calibrate_camera)
+        
         download_csv = QPushButton("Download CSV File")
         download_csv.setStyleSheet(font_style)
         download_csv.clicked.connect(self.set_download_csv)
+        
+        heater_open_loop = QPushButton("Start Heater Open Loop")
+        heater_open_loop.setStyleSheet(font_style)
+        heater_open_loop.clicked.connect(self.set_heater_open_loop)
 
         self.layout.addWidget(spooling_control, 10, 0)
         self.layout.addWidget(start_device, 1, 0)
         self.layout.addWidget(calibrate_motor, 1, 1)
         self.layout.addWidget(calibrate_camera, 1, 2)
         self.layout.addWidget(download_csv, 24, 6)
+        #new
+        self.layout.addWidget(heater_open_loop, 2, 9)
 
     def start_gui(self) -> None:
         """Start the GUI"""
@@ -252,6 +289,27 @@ class UserInterface():
 
         self.window.show()
         self.app.exec_()
+        
+        #new
+    def set_heater_open_loop(self) -> None:
+        """Toggle heater open loop control"""
+        if self.device_started:
+            QMessageBox.warning(self.app.activeWindow(), 
+                              "Control Error",
+                              "Cannot start open loop while close Loop is running.\n"
+                              "Please restart the program.")
+            return
+    
+        self.heater_open_loop_enabled = not self.heater_open_loop_enabled
+        if self.heater_open_loop_enabled:
+            QMessageBox.information(self.app.activeWindow(), 
+                                  "Heater Control",
+                                  "Heater open loop control started.")
+        else:
+            QMessageBox.information(self.app.activeWindow(), 
+                                  "Heater Control",
+                                  "Heater open loop control stopped.")
+        
 
     def update_temperature_slider_label(self, value) -> None:
         """Update the temperature slider label"""
@@ -273,6 +331,12 @@ class UserInterface():
 
     def set_start_device(self) -> None:
         """Set start device flag"""
+        if self.heater_open_loop_enabled:
+            QMessageBox.warning(self.app.activeWindow(), 
+                              "Control Error",
+                              "Cannot start Close Loop while Open Loop is running.\n"
+                              "Please restart the program.")
+            return
         QMessageBox.information(self.app.activeWindow(), "Device Start",
                                 "Device is starting.")
         self.device_started = True
@@ -328,6 +392,10 @@ class UserInterface():
             self.x_data.append(x)
             self.y_data.append(y)
             self.setpoint_data.append(setpoint)
+            
+            #Change the legend to show the current value
+            self.progress_line.set_label(f"{self.axes.get_title()}: {y:.1f}")
+            self.axes.legend()
 
             self.progress_line.set_data(self.x_data, self.y_data)
             self.setpoint_line.set_data(self.x_data, self.setpoint_data)

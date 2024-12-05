@@ -1,6 +1,7 @@
 """File for the fan controller"""
 import RPi.GPIO as GPIO
 from user_interface import UserInterface
+from database import Database
 
 class Fan:
     """Controller for the fan"""
@@ -25,6 +26,7 @@ class Fan:
     def update_duty_cycle(self, duty_cycle: float) -> None:
         """Update speed"""
         self.pwm.ChangeDutyCycle(duty_cycle)
+        Database.fan_duty_cycle.append(duty_cycle)
 
     def control_loop(self) -> None:
         """Set the desired speed"""
