@@ -173,40 +173,37 @@ class Extruder:
             self.gui.show_message("Error", "Error in temperature control loop",
                                   "Please restart the program.")
             
-    def temperature_open_loop_control(self, current_time: float) -> None:
-        """Open loop control of the temperature using PWM"""
+    def temperature_on_and_off_control(self, current_time: float) -> None:
+        """On/off control of the temperature"""
         if current_time - self.previous_time <= Extruder.SAMPLE_TIME:
             return
             
         try:
-            pwm_value = self.gui.temperature_step.value()  # Valor de 0-100%
+            target_temperature = self.gui.temperature_step.value()
             delta_time = current_time - self.previous_time
             self.previous_time = current_time
-            
             temperature = Thermistor.get_temperature(self.channel_0.voltage)
-            
-            # PWM setup if not already configured
-            if not hasattr(self, 'heater_pwm'):
-                GPIO.setup(Extruder.HEATER_PIN, GPIO.OUT)
-                self.heater_pwm = GPIO.PWM(Extruder.HEATER_PIN, 1000)  # 1kHz frequency
-                self.heater_pwm.start(0)
-            
-            # Update PWM duty cycle
-            self.heater_pwm.ChangeDutyCycle(pwm_value)
-            
+
+            # Control on/off
+            if temperature < target_temperature:
+                GPIO.output(Extruder.HEATER_PIN, GPIO.HIGH)
+                heater_output = 1
+            else:
+                GPIO.output(Extruder.HEATER_PIN, GPIO.LOW)
+                heater_output = 0
+
             # Update plot
-            self.gui.temperature_plot.update_plot(current_time, temperature, 0)
-            
+            self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
+
             # Store data
             Database.temperature_delta_time.append(delta_time)
-            Database.temperature_setpoint.append(0)  # No setpoint in open loop
-            Database.temperature_error.append(0)     # No error in open loop
-            Database.temperature_pid_output.append(pwm_value/100)  # Normalized output
-            Database.temperature_kp.append(0)  # No PID in open loop
+            Database.temperature_setpoint.append(target_temperature)
+            Database.temperature_error.append(target_temperature - temperature)
+            Database.temperature_pid_output.append(heater_output)
+            Database.temperature_kp.append(0)
             Database.temperature_ki.append(0)
             Database.temperature_kd.append(0)
-            
+
         except Exception as e:
-            print(f"Error in temperature open loop control: {e}")
-            self.gui.show_message("Error", 
-                                 "Error in temperature open loop control")
+            print(f"Error in temperature on/off control: {e}")
+            self.gui.show_message("Error", "Error in temperature on/off control")

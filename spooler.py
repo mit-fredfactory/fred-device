@@ -193,3 +193,51 @@ class Spooler:
         self.stop()
         self.previous_steps = self.encoder.steps
         print("aaaa")
+        
+
+    def dc_motor_open_loop_control(self, current_time: float) -> None:
+        """Open loop control of the DC motor using PWM"""
+        if current_time - self.previous_time <= Spooler.SAMPLE_TIME:
+            return
+            
+        try:
+            pwm_value = self.gui.dc_motor_pwm.value()
+            delta_time = current_time - self.previous_time
+            self.previous_time = current_time
+            
+            # Measure current RPM
+            delta_steps = self.encoder.steps - self.previous_steps
+            self.previous_steps = self.encoder.steps
+            current_rpm = (delta_steps / Spooler.PULSES_PER_REVOLUTION * 60 / delta_time)
+            
+            # Limit RPM to 0-60 range
+            current_rpm = max(min(current_rpm, 60), 0)
+            
+            # Use existing PWM object if available
+            if not hasattr(self, 'motor_pwm'):
+                GPIO.setwarnings(False)  # Disable warnings
+                if hasattr(self, 'pwm'):
+                    self.motor_pwm = self.pwm
+                else:
+                    GPIO.setup(Spooler.PWM_PIN, GPIO.OUT)
+                    self.motor_pwm = GPIO.PWM(Spooler.PWM_PIN, 1000)
+                    self.motor_pwm.start(0)
+            
+            # Update PWM duty cycle
+            self.motor_pwm.ChangeDutyCycle(pwm_value)
+            
+            # Update plot
+            self.gui.motor_plot.update_plot(current_time, current_rpm, 0)
+            
+            # Store data
+            Database.spooler_delta_time.append(delta_time)
+            Database.spooler_setpoint.append(0)
+            Database.spooler_rpm.append(current_rpm)
+            Database.spooler_gain.append(0)
+            Database.spooler_oscilation_period.append(0)
+            
+        except Exception as e:
+            print(f"Error in DC motor open loop control: {e}")
+            self.gui.show_message("Error", 
+                                 "Error in DC motor open loop control")
+

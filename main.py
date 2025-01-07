@@ -33,13 +33,18 @@ def hardware_control(gui: UserInterface) -> None:
                 spooler.calibrate()
                 gui.start_motor_calibration = False
                 
-            if gui.heater_open_loop_enabled:
-                extruder.temperature_open_loop_control(current_time)
+            # DC Motor Control Logic
+            if gui.dc_motor_open_loop_enabled and not gui.spooling_control_state:
+                spooler.dc_motor_open_loop_control(current_time)
+                
+            # Heater Control Logic
+            if gui.heater_on_off_enabled and not gui.device_started:
+                extruder.temperature_on_and_off_control(current_time)
                 
             elif gui.device_started:
                 extruder.temperature_control_loop(current_time)
                 extruder.stepper_control_loop()
-                if gui.spooling_control_state:
+                if gui.spooling_control_state and not gui.dc_motor_open_loop_enabled:
                     spooler.motor_control_loop(current_time)
                 fan.control_loop()
             time.sleep(0.05)

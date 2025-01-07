@@ -32,7 +32,8 @@ class UserInterface():
         self.fan_duty_cycle_label, self.fan_duty_cycle = self.add_fan_controls()
         
         self.temperature_step_label, self.temperature_step = self.add_temperature_step_control() #NEWW
-
+        
+        self.dc_motor_pwm_label, self.dc_motor_pwm = self.add_dc_motor_controls()#New
 
         # Editable text box for the CSV file name
         self.csv_filename = QLineEdit()
@@ -42,7 +43,11 @@ class UserInterface():
         self.spooling_control_state = False
         self.device_started = False
         self.start_motor_calibration = False
-        self.heater_open_loop_enabled = False #NEw
+        self.heater_on_off_enabled = False #NEw
+        self.dc_motor_open_loop_enabled = False#New
+        self.break_level1_enabled = False
+        self.break_level2_enabled = False
+        self.break_level3_enabled = False
 
         self.fiber_camera = FiberCamera(self.target_diameter)
         if self.fiber_camera.diameter_coefficient == -1:
@@ -223,27 +228,43 @@ class UserInterface():
 
         return fan_duty_cycle_label, fan_duty_cycle
     
-    def add_temperature_step_control(self) -> Tuple[QLabel, QSlider]:
+    def add_temperature_step_control(self) -> Tuple[QLabel, QDoubleSpinBox]:
         """Add UI controls for the temperature step"""
         font_style = "font-size: %ipx; font-weight: bold;"
         
-        temperature_step_label = QLabel("Heater PWM (%)")
+        temperature_step_label = QLabel("Temperature C°")
         temperature_step_label.setStyleSheet(font_style % 14)
         
-        temperature_step = QSlider(Qt.Horizontal)
-        temperature_step.setMinimum(0)    # 0% duty cycle
-        temperature_step.setMaximum(100)  # 100% duty cycle
+        temperature_step = QDoubleSpinBox()
+        temperature_step.setMinimum(0)    # 0
+        temperature_step.setMaximum(120)  # 120C CHECKKKKKKKK
         temperature_step.setValue(0)      # Valor inicial
-        temperature_step.valueChanged.connect(self.update_temperature_step_label)
+        temperature_step.setSingleStep(1) # Incrementos de 1C
+        temperature_step.setDecimals(1)   # 
         
         self.layout.addWidget(temperature_step_label, 3, 9)
         self.layout.addWidget(temperature_step, 4, 9)
         
         return temperature_step_label, temperature_step
-
-    def update_temperature_step_label(self, value) -> None:
-        """Update the temperature step slider label"""
-        self.temperature_step_label.setText(f"Heater PWM: {value}%")
+    
+    def add_dc_motor_controls(self) -> Tuple[QLabel, QDoubleSpinBox]:
+        """Add UI controls for the DC motor open loop"""
+        font_style = "font-size: %ipx; font-weight: bold;"
+        
+        dc_motor_pwm_label = QLabel("DC Motor PWM (%)")
+        dc_motor_pwm_label.setStyleSheet(font_style % 14)
+        
+        dc_motor_pwm = QDoubleSpinBox()
+        dc_motor_pwm.setMinimum(0)
+        dc_motor_pwm.setMaximum(100)
+        dc_motor_pwm.setValue(0)
+        dc_motor_pwm.setSingleStep(1)
+        dc_motor_pwm.setDecimals(0)
+        
+        self.layout.addWidget(dc_motor_pwm_label, 7, 9)
+        self.layout.addWidget(dc_motor_pwm, 8, 9)
+        
+        return dc_motor_pwm_label, dc_motor_pwm
 
     def add_buttons(self):
         """Add buttons to the layout"""
@@ -269,9 +290,30 @@ class UserInterface():
         download_csv.setStyleSheet(font_style)
         download_csv.clicked.connect(self.set_download_csv)
         
-        heater_open_loop = QPushButton("Start Heater Open Loop")
-        heater_open_loop.setStyleSheet(font_style)
-        heater_open_loop.clicked.connect(self.set_heater_open_loop)
+        heater_on_off = QPushButton("Start on/off temp Ctrl")
+        heater_on_off.setStyleSheet(font_style)
+        heater_on_off.clicked.connect(self.set_heater_on_and_off)
+        
+        dc_motor_open_loop = QPushButton("Start DC Motor Open Loop")
+        dc_motor_open_loop.setStyleSheet(font_style)
+        dc_motor_open_loop.clicked.connect(self.set_dc_motor_open_loop)
+        
+        # Teacher label
+        teacher_label = QLabel("Teacher's Tools")
+        
+        # Break buttons
+        break_level1 = QPushButton("Break FrED Lvl.1")
+        break_level1.setStyleSheet(font_style)
+        break_level1.clicked.connect(self.set_break_level1)
+        
+        break_level2 = QPushButton("Break FrED Lvl.2")
+        break_level2.setStyleSheet(font_style)
+        break_level2.clicked.connect(self.set_break_level2)
+        
+        break_level3 = QPushButton("Break FrED Lvl.3")
+        break_level3.setStyleSheet(font_style)
+        break_level3.clicked.connect(self.set_break_level3)
+        
 
         self.layout.addWidget(spooling_control, 10, 0)
         self.layout.addWidget(start_device, 1, 0)
@@ -279,7 +321,13 @@ class UserInterface():
         self.layout.addWidget(calibrate_camera, 1, 2)
         self.layout.addWidget(download_csv, 24, 6)
         #new
-        self.layout.addWidget(heater_open_loop, 2, 9)
+        self.layout.addWidget(heater_on_off, 2, 9)#check
+        self.layout.addWidget(dc_motor_open_loop, 6, 9)
+        
+        self.layout.addWidget(teacher_label, 12, 9)
+        self.layout.addWidget(break_level1, 13, 9)
+        self.layout.addWidget(break_level2, 14, 9)
+        self.layout.addWidget(break_level3, 15, 9)
 
     def start_gui(self) -> None:
         """Start the GUI"""
@@ -291,24 +339,60 @@ class UserInterface():
         self.app.exec_()
         
         #new
-    def set_heater_open_loop(self) -> None:
-        """Toggle heater open loop control"""
+    def set_heater_on_and_off(self) -> None:
+        """Toggle heater on/off control"""
         if self.device_started:
-            QMessageBox.warning(self.app.activeWindow(), 
-                              "Control Error",
-                              "Cannot start open loop while close Loop is running.\n"
-                              "Please restart the program.")
+            QMessageBox.warning(self.app.activeWindow(), "Control Error", 
+                "Cannot start on/off control while close Loop is running.\n"
+                "Please restart the program.")
             return
-    
-        self.heater_open_loop_enabled = not self.heater_open_loop_enabled
-        if self.heater_open_loop_enabled:
+        
+        self.heater_on_off_enabled = not self.heater_on_off_enabled
+        if self.heater_on_off_enabled:
             QMessageBox.information(self.app.activeWindow(), 
-                                  "Heater Control",
-                                  "Heater open loop control started.")
+                "Heater Control", "Heater on/off control started.")
         else:
             QMessageBox.information(self.app.activeWindow(), 
-                                  "Heater Control",
-                                  "Heater open loop control stopped.")
+                "Heater Control", "Heater on/off control stopped.")
+        
+            
+    def set_dc_motor_open_loop(self) -> None:
+        """Toggle DC motor open loop control"""
+        if self.spooling_control_state:
+            QMessageBox.warning(self.app.activeWindow(), 
+                              "Control Error",
+                              "Cannot start Open Loop while Close Loop is running.\n"
+                              "Please restart the program.")
+            return
+            
+        self.dc_motor_open_loop_enabled = not self.dc_motor_open_loop_enabled
+        if self.dc_motor_open_loop_enabled:
+            QMessageBox.information(self.app.activeWindow(), 
+                                  "DC Motor Control",
+                                  "DC Motor open loop control started.")
+        else:
+            QMessageBox.information(self.app.activeWindow(), 
+                                  "DC Motor Control",
+                                  "DC Motor open loop control stopped.")
+            
+            
+    def set_break_level1(self) -> None:
+        """Handle Break FrED Level 1"""
+        QMessageBox.information(self.app.activeWindow(), 
+                              "Break Level 1",
+                              "Break FrED Level 1 activated.")
+
+    def set_break_level2(self) -> None:
+        """Handle Break FrED Level 2"""
+        QMessageBox.information(self.app.activeWindow(), 
+                              "Break Level 2",
+                              "Break FrED Level 2 activated.")
+
+    def set_break_level3(self) -> None:
+        """Handle Break FrED Level 3"""
+        QMessageBox.information(self.app.activeWindow(), 
+                              "Break Level 3",
+                              "Break FrED Level 3 activated.")
         
 
     def update_temperature_slider_label(self, value) -> None:
@@ -331,10 +415,10 @@ class UserInterface():
 
     def set_start_device(self) -> None:
         """Set start device flag"""
-        if self.heater_open_loop_enabled:
+        if self.heater_on_off_enabled:
             QMessageBox.warning(self.app.activeWindow(), 
                               "Control Error",
-                              "Cannot start Close Loop while Open Loop is running.\n"
+                              "Cannot start Close Loop while on&off control is running.\n"
                               "Please restart the program.")
             return
         QMessageBox.information(self.app.activeWindow(), "Device Start",
