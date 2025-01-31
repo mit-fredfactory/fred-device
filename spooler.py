@@ -42,8 +42,8 @@ class Spooler:
 
     def initialize_encoder(self) -> None:
         """Initialize the encoder and SPI"""
-        self.encoder = RotaryEncoder(Spooler.ENCODER_A_PIN,
-                                     Spooler.ENCODER_B_PIN, max_steps=0)
+        self.encoder = RotaryEncoder(Spooler.ENCODER_B_PIN,
+                                     Spooler.ENCODER_A_PIN, max_steps=0)#new check change swap a & b
 
     def start(self, frequency: float, duty_cycle: float) -> None:
         """Start the DC Motor PWM"""
@@ -240,4 +240,3 @@ class Spooler:
             print(f"Error in DC motor open loop control: {e}")
             self.gui.show_message("Error", 
                                  "Error in DC motor open loop control")
-

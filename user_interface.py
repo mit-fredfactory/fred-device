@@ -45,11 +45,14 @@ class UserInterface():
         self.start_motor_calibration = False
         self.heater_on_off_enabled = False #NEw
         self.dc_motor_open_loop_enabled = False#New
+        self.camera_feedback_enabled = False #New
         self.break_level1_enabled = False
         self.break_level2_enabled = False
         self.break_level3_enabled = False
+        
+        self.fiber_camera = FiberCamera(self.target_diameter, self) #new check
 
-        self.fiber_camera = FiberCamera(self.target_diameter)
+        #self.fiber_camera = FiberCamera(self.target_diameter)
         if self.fiber_camera.diameter_coefficient == -1:
             self.show_message("Camera calibration data not found",
                               "Please calibrate the camera.")
@@ -148,8 +151,8 @@ class UserInterface():
         extrusion_motor_speed_label.setStyleSheet(font_style % 16)
         extrusion_motor_speed = QDoubleSpinBox()
         extrusion_motor_speed.setMinimum(0.0)
-        extrusion_motor_speed.setMaximum(2.0)
-        extrusion_motor_speed.setValue(1.2)
+        extrusion_motor_speed.setMaximum(20.0) #changed by russel
+        extrusion_motor_speed.setValue(0.0)
         extrusion_motor_speed.setSingleStep(0.1)
         extrusion_motor_speed.setDecimals(1)
 
@@ -314,6 +317,11 @@ class UserInterface():
         break_level3.setStyleSheet(font_style)
         break_level3.clicked.connect(self.set_break_level3)
         
+        camera_feedback = QPushButton("Start camera feedback")
+        camera_feedback.setStyleSheet(font_style)
+        camera_feedback.clicked.connect(self.set_camera_feedback)
+        self.layout.addWidget(camera_feedback, 9, 9)
+        
 
         self.layout.addWidget(spooling_control, 10, 0)
         self.layout.addWidget(start_device, 1, 0)
@@ -412,6 +420,16 @@ class UserInterface():
         else:
             QMessageBox.information(self.app.activeWindow(), "Spooling Control",
                                     "Spooling control stopped.")
+            
+    def set_camera_feedback(self) -> None:
+        """Toggle camera feedback control"""
+        self.camera_feedback_enabled = not self.camera_feedback_enabled
+        if self.camera_feedback_enabled:
+            QMessageBox.information(self.app.activeWindow(), 
+                "Camera Feedback", "Camera feedback started.")
+        else:
+            QMessageBox.information(self.app.activeWindow(), 
+                "Camera Feedback", "Camera feedback stopped.")   #new check
 
     def set_start_device(self) -> None:
         """Set start device flag"""

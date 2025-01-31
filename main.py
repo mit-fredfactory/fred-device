@@ -40,10 +40,17 @@ def hardware_control(gui: UserInterface) -> None:
             # Heater Control Logic
             if gui.heater_on_off_enabled and not gui.device_started:
                 extruder.temperature_on_and_off_control(current_time)
-                
+                extruder.stepper_control_loop()
+            
+            # Camera Feedback PLOT OPEN LOOP
+            if gui.camera_feedback_enabled:
+                gui.fiber_camera.camera_feedback(current_time)
+                            
             elif gui.device_started:
                 extruder.temperature_control_loop(current_time)
+                
                 extruder.stepper_control_loop()
+                
                 if gui.spooling_control_state and not gui.dc_motor_open_loop_enabled:
                     spooler.motor_control_loop(current_time)
                 fan.control_loop()

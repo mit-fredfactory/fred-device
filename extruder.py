@@ -46,26 +46,10 @@ class Extruder:
     HEATER_PIN = 6
     DIRECTION_PIN = 16
     STEP_PIN = 12
-    MICROSTEP_PIN_A = 17
-    MICROSTEP_PIN_B = 27
-    MICROSTEP_PIN_C = 22
     DEFAULT_DIAMETER = 0.35
     MINIMUM_DIAMETER = 0.3
     MAXIMUM_DIAMETER = 0.6
     STEPS_PER_REVOLUTION = 200
-    RESOLUTION = {'1': (0, 0, 0),
-                  '1/2': (1, 0, 0),
-                  '1/4': (0, 1, 0),
-                  '1/8': (1, 1, 0),
-                 '1/16': (0, 0, 1),
-                 '1/32': (1, 0, 1)}
-    FACTOR = {'1': 1,
-                   '1/2': 2,
-                   '1/4': 4,
-                   '1/8': 8,
-                   '1/16': 16,
-                   '1/32': 32}
-    DEFAULT_MICROSTEPPING = '1/4'
     DEFAULT_RPM = 0.6 # TODO: Delay is not being used, will be removed temporarily
     SAMPLE_TIME = 0.1
     MAX_OUTPUT = 1
@@ -76,17 +60,16 @@ class Extruder:
         self.speed = 0.0
         self.duty_cycle = 0.0
         self.channel_0 = None
+        
         GPIO.setup(Extruder.HEATER_PIN, GPIO.OUT)
         GPIO.setup(Extruder.DIRECTION_PIN, GPIO.OUT)
         GPIO.setup(Extruder.STEP_PIN, GPIO.OUT)
-        GPIO.setup(Extruder.MICROSTEP_PIN_A, GPIO.OUT)
-        GPIO.setup(Extruder.MICROSTEP_PIN_B, GPIO.OUT)
-        GPIO.setup(Extruder.MICROSTEP_PIN_C, GPIO.OUT)
-
-        self.motor_step(0)
+        self.set_motor_direction(False)
+        # PWM Setup
+        self.pwm = GPIO.PWM(Extruder.STEP_PIN, 1000)  # Initial 1000Hz
+        self.pwm.start(0)  # 50% duty cycle
+    
         self.initialize_thermistor()
-        self.set_microstepping(Extruder.DEFAULT_MICROSTEPPING)
-
         self.current_diameter = 0.0
         self.diameter_setpoint = Extruder.DEFAULT_DIAMETER
         
@@ -108,32 +91,28 @@ class Extruder:
         # Create analog inputs connected to the input pins on the MCP3008
         self.channel_0 = AnalogIn(mcp, MCP.P0)
 
-    def set_microstepping(self, mode: str) -> None:
-        """Set the microstepping mode"""
-        GPIO.output(Extruder.MICROSTEP_PIN_A, Extruder.RESOLUTION[mode][0])
-        GPIO.output(Extruder.MICROSTEP_PIN_B, Extruder.RESOLUTION[mode][1])
-        GPIO.output(Extruder.MICROSTEP_PIN_C, Extruder.RESOLUTION[mode][2])
+    def set_motor_direction(self, clockwise: bool) -> None:
+        """Set motor direction"""
+        GPIO.output(Extruder.DIRECTION_PIN, not clockwise)
 
-    def motor_step(self, direction: int) -> None:
-        """Step the motor in the given direction"""
-        GPIO.output(Extruder.DIRECTION_PIN, direction)
+    def set_motor_speed(self, rpm: float) -> None:
+        """Set motor speed in RPM"""
+        steps_per_second = (rpm * Extruder.STEPS_PER_REVOLUTION) / 60
+        frequency = steps_per_second * 2  # Each cycle is two steps
+        self.pwm.ChangeFrequency(frequency)
+        self.pwm.ChangeDutyCycle(50)
 
     def stepper_control_loop(self) -> None:
-        """Move the stepper motor constantly"""
+        """Control stepper motor speed"""
         try:
             setpoint_rpm = self.gui.extrusion_motor_speed.value()
-            delay = (60 / setpoint_rpm / Extruder.STEPS_PER_REVOLUTION /
-                    Extruder.FACTOR[Extruder.DEFAULT_MICROSTEPPING])
-            GPIO.output(Extruder.DIRECTION_PIN, 1)
-            GPIO.output(Extruder.STEP_PIN, GPIO.HIGH)
-            time.sleep(delay)
-            GPIO.output(Extruder.STEP_PIN, GPIO.LOW)
-            time.sleep(delay)
+            self.pwm.ChangeDutyCycle(0)
+            if setpoint_rpm > 0.0:
+                self.set_motor_speed(setpoint_rpm)
             Database.extruder_rpm.append(setpoint_rpm)
         except Exception as e:
             print(f"Error in stepper control loop: {e}")
-            self.gui.show_message("Error in stepper control loop",
-                                    "Please restart the program.")
+            self.gui.show_message("Error", "Stepper control loop error")
 
     def temperature_control_loop(self, current_time: float) -> None:
         """Closed loop control of the temperature of the extruder for desired diameter"""
@@ -207,3 +186,4 @@ class Extruder:
         except Exception as e:
             print(f"Error in temperature on/off control: {e}")
             self.gui.show_message("Error", "Error in temperature on/off control")
+                 
