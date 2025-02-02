@@ -2,7 +2,7 @@
 import time
 import numpy as np
 import RPi.GPIO as GPIO
-from gpiozero import RotaryEncoder
+import spidev 
 
 from database import Database
 from user_interface import UserInterface
@@ -10,11 +10,10 @@ from user_interface import UserInterface
 
 class Spooler:
     """DC Motor Controller for the spooling process"""
-    ENCODER_A_PIN = 24
-    ENCODER_B_PIN = 23
+    SLAVE_SELECT_ENC = 26
     PWM_PIN = 5
-
-    PULSES_PER_REVOLUTION = 1176
+    
+    PULSES_PER_REVOLUTION = 4704  # Updated for the new encoder
     READINGS_TO_AVERAGE = 10
     SAMPLE_TIME = 0.1
     DIAMETER_PREFORM = 7
@@ -22,28 +21,67 @@ class Spooler:
 
     def __init__(self, gui: UserInterface) -> None:
         self.gui = gui
-        self.encoder = None
         self.pwm = None
         self.slope = Database.get_calibration_data("motor_slope")
         self.intercept = Database.get_calibration_data("motor_intercept")
         self.motor_calibration = True
         if self.slope == -1 or self.intercept == -1:
             self.motor_calibration = False
+        
+        # Initialize GPIO
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(Spooler.SLAVE_SELECT_ENC, GPIO.OUT)
         GPIO.setup(Spooler.PWM_PIN, GPIO.OUT)
+        GPIO.output(Spooler.SLAVE_SELECT_ENC, GPIO.HIGH)
+        
         self.initialize_encoder()
         
         # Control parameters
         self.previous_time = 0.0
         self.integral_diameter = 0.0
         self.previous_error_diameter = 0.0
-        self.previous_steps = 0
+        self.previous_position = 0
         self.integral_motor = 0.0
         self.previous_error_motor = 0.0
 
     def initialize_encoder(self) -> None:
         """Initialize the encoder and SPI"""
-        self.encoder = RotaryEncoder(Spooler.ENCODER_B_PIN,
-                                     Spooler.ENCODER_A_PIN, max_steps=0)#new check change swap a & b
+        self.spi = spidev.SpiDev()
+        self.spi.open(0, 0)
+        self.spi.max_speed_hz = 50000
+        
+        # Initialize encoder
+        GPIO.output(Spooler.SLAVE_SELECT_ENC, GPIO.LOW)
+        self.spi.xfer2([0x88, 0x03])
+        GPIO.output(Spooler.SLAVE_SELECT_ENC, GPIO.HIGH)
+        
+        # Clear encoder count
+        self.clear_encoder_count()
+        
+    def clear_encoder_count(self) -> None:
+        """Clear the encoder count"""
+        GPIO.output(Spooler.SLAVE_SELECT_ENC, GPIO.LOW)
+        self.spi.xfer2([0x98, 0x00, 0x00, 0x00, 0x00])
+        GPIO.output(Spooler.SLAVE_SELECT_ENC, GPIO.HIGH)
+        
+        time.sleep(0.0001)
+        
+        GPIO.output(Spooler.SLAVE_SELECT_ENC, GPIO.LOW)
+        self.spi.xfer2([0xE0])
+        GPIO.output(Spooler.SLAVE_SELECT_ENC, GPIO.HIGH)
+    
+    def read_encoder(self) -> int:
+        """Read the encoder position"""
+        GPIO.output(Spooler.SLAVE_SELECT_ENC, GPIO.LOW)
+        self.spi.xfer2([0x60])
+        count_1 = self.spi.xfer2([0x00])
+        count_2 = self.spi.xfer2([0x00])
+        count_3 = self.spi.xfer2([0x00])
+        count_4 = self.spi.xfer2([0x00])
+        GPIO.output(Spooler.SLAVE_SELECT_ENC, GPIO.HIGH)
+        
+        count_value = (count_1[0] << 24) + (count_2[0] << 16) + (count_3[0] << 8) + count_4[0]
+        return count_value
 
     def start(self, frequency: float, duty_cycle: float) -> None:
         """Start the DC Motor PWM"""
@@ -68,7 +106,7 @@ class Spooler:
             return (sum(Database.diameter_readings[-Spooler.READINGS_TO_AVERAGE:])
                     / Spooler.READINGS_TO_AVERAGE)
 
-    def diameter_to_rpm(self, diameter: float) -> float:
+    def diameter_to_rpm(self, diameter: float) -> float: #old code but reading it right now why stepper?
         """Convert the fiber diameter to RPM of the spooling motor"""
         stepper_rpm = self.gui.extrusion_motor_speed.value()
         return 25/28 * 11 * stepper_rpm * (Spooler.DIAMETER_PREFORM**2 /
@@ -87,6 +125,17 @@ class Spooler:
                 self.gui.show_message("Motor calibration data not found",
                                     "Please calibrate the motor.")
                 self.motor_calibration = True
+            
+            # Read current position and calculate RPM    new check
+            current_position = self.read_encoder()
+            delta_time = current_time - self.previous_time
+            delta_position = current_position - self.previous_position
+            current_rpm = (delta_position / Spooler.PULSES_PER_REVOLUTION) * (60 / delta_time)
+            
+            #update previous values
+            self.previous_position = current_position
+            self.previous_time = current_time
+            
             target_diameter = self.gui.target_diameter.value()
             current_diameter = self.get_average_diameter()
 
@@ -105,9 +154,9 @@ class Spooler:
             motor_td = motor_tu / 8
             motor_ki = motor_kp / motor_ti
             motor_kd = motor_kp * motor_td
+            
+            #intragated control old check it
 
-            delta_time = current_time - self.previous_time
-            self.previous_time = current_time
             error = target_diameter - current_diameter
             self.integral_diameter += error * delta_time
             self.integral_diameter = max(min(self.integral_diameter, 0.5), -0.5)
@@ -118,11 +167,8 @@ class Spooler:
             setpoint_rpm = self.diameter_to_rpm(target_diameter)
             setpoint_rpm = max(min(setpoint_rpm, 0), 60)
 
-            # Control the motor
-            delta_steps = self.encoder.steps - self.previous_steps
-            self.previous_steps = self.encoder.steps
-            current_rpm = (delta_steps / Spooler.PULSES_PER_REVOLUTION * 
-                           60 / delta_time)
+            # Control the motor old cheeck it
+             
             error = setpoint_rpm - current_rpm
             self.integral_motor += error * delta_time
             self.integral_motor = max(min(self.integral_motor, 100), -100)
@@ -163,15 +209,18 @@ class Spooler:
                 for _ in range(num_samples):
                     self.update_duty_cycle(duty_cycle)
                     time.sleep(2)
+                    
                     # Measure RPM
-                    oldtime = time.perf_counter()
-                    oldpos = self.encoder.steps
+                    start_time = time.perf_counter()
+                    start_position = self.read_encoder()
                     time.sleep(Spooler.SAMPLE_TIME)
-                    newtime = time.perf_counter()
-                    newpos = self.encoder.steps
-                    dt = newtime - oldtime
-                    ds = newpos - oldpos
-                    rpm = ds / Spooler.PULSES_PER_REVOLUTION / dt * 60
+                    end_time = time.perf_counter()
+                    end_position = self.read_encoder()
+                    
+                    delta_time = end_time - start_time
+                    delta_position = end_position - start_position
+                    rpm = (delta_position / Spooler.PULSES_PER_REVOLUTION) * (60 / delta_time)
+                    
                     rpm_samples.append(rpm)
                 avg_rpm = sum(rpm_samples) / num_samples
                 duty_cycles.append(duty_cycle)
@@ -191,7 +240,6 @@ class Spooler:
         self.gui.show_message("Motor calibration completed.",
                                "Please restart the program.")
         self.stop()
-        self.previous_steps = self.encoder.steps
         print("aaaa")
         
 
@@ -206,9 +254,13 @@ class Spooler:
             self.previous_time = current_time
             
             # Measure current RPM
-            delta_steps = self.encoder.steps - self.previous_steps
-            self.previous_steps = self.encoder.steps
-            current_rpm = (delta_steps / Spooler.PULSES_PER_REVOLUTION * 60 / delta_time)
+            current_position = self.read_encoder()
+            delta_position = current_position - self.previous_position
+            current_rpm = (delta_position / Spooler.PULSES_PER_REVOLUTION) * (60 / delta_time)
+            
+            #update previous values
+            self.previous_position = current_position
+            self.previous_time = current_time
             
             # Limit RPM to 0-60 range
             current_rpm = max(min(current_rpm, 60), 0)
