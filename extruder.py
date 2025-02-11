@@ -127,6 +127,7 @@ class Extruder:
             delta_time = current_time - self.previous_time
             self.previous_time = current_time
             temperature = Thermistor.get_temperature(self.channel_0.voltage)
+            
             error = target_temperature - temperature
             self.integral += error * delta_time
             derivative = (error - self.previous_error) / delta_time
@@ -138,8 +139,9 @@ class Extruder:
                 output = Extruder.MIN_OUTPUT
             GPIO.output(Extruder.HEATER_PIN,
                         GPIO.HIGH if output > 0 else GPIO.LOW)
-            self.gui.temperature_plot.update_plot(current_time, temperature,
-                                                    target_temperature)
+            self.gui.temperature_plot.update_plot(current_time, temperature,target_temperature)
+            
+            Database.temperature_timestamps.append(current_time)
             Database.temperature_delta_time.append(delta_time)
             Database.temperature_setpoint.append(target_temperature)
             Database.temperature_error.append(error)
@@ -175,6 +177,7 @@ class Extruder:
             self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
 
             # Store data
+            Database.temperature_timestamps.append(current_time)
             Database.temperature_delta_time.append(delta_time)
             Database.temperature_setpoint.append(target_temperature)
             Database.temperature_error.append(target_temperature - temperature)

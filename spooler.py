@@ -183,10 +183,11 @@ class Spooler:
             # Update plots
             self.gui.motor_plot.update_plot(current_time, current_rpm,
                                             setpoint_rpm)
-            self.gui.diameter_plot.update_plot(current_time, current_diameter,
-                                                  target_diameter)
+            self.gui.diameter_plot.update_plot(current_time, current_diameter,target_diameter)
+
 
             # Add data to the database
+            Database.spooler_timestamps.append(current_time)
             Database.spooler_delta_time.append(delta_time)
             Database.spooler_setpoint.append(setpoint_rpm)
             Database.spooler_rpm.append(current_rpm)
@@ -282,6 +283,7 @@ class Spooler:
             self.gui.motor_plot.update_plot(current_time, current_rpm, 0)
             
             # Store data
+            Database.spooler_timestamps.append(current_time)
             Database.spooler_delta_time.append(delta_time)
             Database.spooler_setpoint.append(0)
             Database.spooler_rpm.append(current_rpm)

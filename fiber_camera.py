@@ -30,6 +30,7 @@ class FiberCamera(QWidget):
 
     def camera_loop(self) -> None:
         """Loop to capture and process frames from the camera"""
+        current_time=time.time()
         success, frame = self.capture.read()
         assert success, "Failed to capture frame"  # Check if frame is captured
 
@@ -46,10 +47,12 @@ class FiberCamera(QWidget):
         frame = self.plot_lines(frame, detected_lines)
         # Emit the line_value_updated signal with the new line_value
         #self.line_value_updated.emit(line_value)
-        Database.diameter_delta_time.append(time.time() - self.previous_time)
-        self.previous_time = time.time()
+        Database.camera_timestamps.append(current_time)
         Database.diameter_readings.append(fiber_diameter)
         Database.diameter_setpoint.append(self.target_diameter.value())
+        Database.diameter_delta_time.append(current_time - self.previous_time)
+        self.previous_time = current_time
+        
 
         # Display the frame with lines
         image_for_gui = QImage(frame, frame.shape[1], frame.shape[0],
@@ -172,16 +175,13 @@ class FiberCamera(QWidget):
             current_diameter = self.get_fiber_diameter(detected_lines)
             
             # Actualizar gráfico siempre, incluso con valor cero
-            self.gui.diameter_plot.update_plot(
-                current_time,
-                current_diameter, 
-                self.target_diameter.value()
-            )
+            self.gui.diameter_plot.update_plot(current_time,current_diameter, self.target_diameter.value())
             
+            Database.camera_timestamps.append(current_time)
             Database.diameter_readings.append(current_diameter)
             Database.diameter_setpoint.append(self.target_diameter.value())
-            Database.diameter_delta_time.append(time.time() - self.previous_time)
-            self.previous_time = time.time()
+            Database.diameter_delta_time.append(current_time - self.previous_time)
+            self.previous_time = current_time
             
         except Exception as e:
             print(f"Error en camera feedback: {e}")

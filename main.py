@@ -73,3 +73,4 @@ if __name__ == "__main__":
     ui.start_gui()
     hardware_thread.join()
     print("FrED Device Closed.")
+

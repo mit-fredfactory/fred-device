@@ -505,3 +505,4 @@ class UserInterface():
             self.axes.relim()
             self.axes.autoscale_view()
             self.draw()
+
