@@ -38,8 +38,8 @@ def hardware_control(gui: UserInterface) -> None:
                 spooler.dc_motor_open_loop_control(current_time)
                 
             # Heater Control Logic
-            if gui.heater_on_off_enabled and not gui.device_started:
-                extruder.temperature_on_and_off_control(current_time)
+            if gui.heater_open_loop_enabled and not gui.device_started:  
+                extruder.temperature_open_loop_control(current_time)     
                 extruder.stepper_control_loop()
             
             # Camera Feedback PLOT OPEN LOOP

@@ -66,8 +66,11 @@ class Extruder:
         GPIO.setup(Extruder.STEP_PIN, GPIO.OUT)
         self.set_motor_direction(False)
         # PWM Setup
-        self.pwm = GPIO.PWM(Extruder.STEP_PIN, 1000)  # Initial 1000Hz
-        self.pwm.start(0)  # 50% duty cycle
+        self.pwm = GPIO.PWM(Extruder.STEP_PIN, 1000)  
+        self.pwm.start(0)  
+        
+        self.heater_pwm = GPIO.PWM(Extruder.HEATER_PIN, 1)  
+        self.heater_pwm.start(0)  
     
         self.initialize_thermistor()
         self.current_diameter = 0.0
@@ -154,39 +157,40 @@ class Extruder:
             self.gui.show_message("Error", "Error in temperature control loop",
                                   "Please restart the program.")
             
-    def temperature_on_and_off_control(self, current_time: float) -> None:
-        """On/off control of the temperature"""
+    
+    def temperature_open_loop_control(self, current_time: float) -> None:
+        """Open loop PWM control of the heater"""
         if current_time - self.previous_time <= Extruder.SAMPLE_TIME:
             return
             
         try:
-            target_temperature = self.gui.temperature_step.value()
+            pwm_value = self.gui.heater_open_loop_pwm.value()
             delta_time = current_time - self.previous_time
             self.previous_time = current_time
             temperature = Thermistor.get_temperature(self.channel_0.voltage)
 
-            # Control on/off
-            if temperature < target_temperature:
-                GPIO.output(Extruder.HEATER_PIN, GPIO.HIGH)
-                heater_output = 1
-            else:
-                GPIO.output(Extruder.HEATER_PIN, GPIO.LOW)
-                heater_output = 0
+            # Configurar PWM para el heater
+            if not hasattr(self, 'heater_pwm'):
+                self.heater_pwm = GPIO.PWM(Extruder.HEATER_PIN, 1)  # 1kHz frequency
+                self.heater_pwm.start(0)
 
-            # Update plot
-            self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
+            # Actualizar duty cycle del PWM
+            self.heater_pwm.ChangeDutyCycle(pwm_value)
 
-            # Store data
+            # Actualizar gráfica
+            self.gui.temperature_plot.update_plot(current_time, temperature, 0)
+
+            # Almacenar datos
             Database.temperature_timestamps.append(current_time)
             Database.temperature_delta_time.append(delta_time)
-            Database.temperature_setpoint.append(target_temperature)
-            Database.temperature_error.append(target_temperature - temperature)
-            Database.temperature_pid_output.append(heater_output)
+            Database.temperature_setpoint.append(0)  # No hay setpoint en lazo abierto
+            Database.temperature_error.append(0)     # No hay error en lazo abierto
+            Database.temperature_pid_output.append(pwm_value)
             Database.temperature_kp.append(0)
             Database.temperature_ki.append(0)
             Database.temperature_kd.append(0)
 
         except Exception as e:
-            print(f"Error in temperature on/off control: {e}")
-            self.gui.show_message("Error", "Error in temperature on/off control")
+            print(f"Error in temperature open loop control: {e}")
+            self.gui.show_message("Error", "Error in temperature open loop control")
                  

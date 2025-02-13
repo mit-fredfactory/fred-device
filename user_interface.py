@@ -31,7 +31,7 @@ class UserInterface():
 
         self.fan_duty_cycle_label, self.fan_duty_cycle = self.add_fan_controls()
         
-        self.temperature_step_label, self.temperature_step = self.add_temperature_step_control() #NEWW
+        self.heater_open_loop_pwm_label, self.heater_open_loop_pwm = self.add_heater_open_loop_pwm_control() #NEWW
         
         self.dc_motor_pwm_label, self.dc_motor_pwm = self.add_dc_motor_controls()#New
 
@@ -43,7 +43,7 @@ class UserInterface():
         self.spooling_control_state = False
         self.device_started = False
         self.start_motor_calibration = False
-        self.heater_on_off_enabled = False #NEw
+        self.heater_open_loop_enabled = False #NEw
         self.dc_motor_open_loop_enabled = False#New
         self.camera_feedback_enabled = False #New
         self.break_level1_enabled = False
@@ -231,24 +231,24 @@ class UserInterface():
 
         return fan_duty_cycle_label, fan_duty_cycle
     
-    def add_temperature_step_control(self) -> Tuple[QLabel, QDoubleSpinBox]:
-        """Add UI controls for the temperature step"""
+    def add_heater_open_loop_pwm_control(self) -> Tuple[QLabel, QDoubleSpinBox]:
+        """Add UI controls for the heater PWM open loop"""
         font_style = "font-size: %ipx; font-weight: bold;"
         
-        temperature_step_label = QLabel("Temperature C°")
-        temperature_step_label.setStyleSheet(font_style % 14)
+        heater_open_loop_pwm_label = QLabel("Heater Open Loop PWM (%)")
+        heater_open_loop_pwm_label.setStyleSheet(font_style % 14)
         
-        temperature_step = QDoubleSpinBox()
-        temperature_step.setMinimum(0)    # 0
-        temperature_step.setMaximum(120)  # 120C CHECKKKKKKKK
-        temperature_step.setValue(0)      # Valor inicial
-        temperature_step.setSingleStep(1) # Incrementos de 1C
-        temperature_step.setDecimals(1)   # 
+        heater_open_loop_pwm = QDoubleSpinBox()
+        heater_open_loop_pwm.setMinimum(0)
+        heater_open_loop_pwm.setMaximum(100)
+        heater_open_loop_pwm.setValue(0)
+        heater_open_loop_pwm.setSingleStep(1)
+        heater_open_loop_pwm.setDecimals(0)
         
-        self.layout.addWidget(temperature_step_label, 3, 9)
-        self.layout.addWidget(temperature_step, 4, 9)
+        self.layout.addWidget(heater_open_loop_pwm_label, 3, 9)
+        self.layout.addWidget(heater_open_loop_pwm, 4, 9)
         
-        return temperature_step_label, temperature_step
+        return heater_open_loop_pwm_label, heater_open_loop_pwm
     
     def add_dc_motor_controls(self) -> Tuple[QLabel, QDoubleSpinBox]:
         """Add UI controls for the DC motor open loop"""
@@ -293,9 +293,9 @@ class UserInterface():
         download_csv.setStyleSheet(font_style)
         download_csv.clicked.connect(self.set_download_csv)
         
-        heater_on_off = QPushButton("Start on/off temp Ctrl")
-        heater_on_off.setStyleSheet(font_style)
-        heater_on_off.clicked.connect(self.set_heater_on_and_off)
+        heater_open_loop = QPushButton("Start Heater Open Loop")
+        heater_open_loop.setStyleSheet(font_style)
+        heater_open_loop.clicked.connect(self.set_heater_open_loop)
         
         dc_motor_open_loop = QPushButton("Start DC Motor Open Loop")
         dc_motor_open_loop.setStyleSheet(font_style)
@@ -329,7 +329,7 @@ class UserInterface():
         self.layout.addWidget(calibrate_camera, 1, 2)
         self.layout.addWidget(download_csv, 24, 6)
         #new
-        self.layout.addWidget(heater_on_off, 2, 9)#check
+        self.layout.addWidget(heater_open_loop, 2, 9)#check
         self.layout.addWidget(dc_motor_open_loop, 6, 9)
         
         self.layout.addWidget(teacher_label, 12, 9)
@@ -347,21 +347,21 @@ class UserInterface():
         self.app.exec_()
         
         #new
-    def set_heater_on_and_off(self) -> None:
-        """Toggle heater on/off control"""
+    def set_heater_open_loop(self) -> None:
+        """Toggle heater open loop control"""
         if self.device_started:
             QMessageBox.warning(self.app.activeWindow(), "Control Error", 
-                "Cannot start on/off control while close Loop is running.\n"
+                "Cannot start open loop control while close loop is running.\n"
                 "Please restart the program.")
             return
         
-        self.heater_on_off_enabled = not self.heater_on_off_enabled
-        if self.heater_on_off_enabled:
+        self.heater_open_loop_enabled = not self.heater_open_loop_enabled
+        if self.heater_open_loop_enabled:
             QMessageBox.information(self.app.activeWindow(), 
-                "Heater Control", "Heater on/off control started.")
+                "Heater Control", "Heater open loop control started.")
         else:
             QMessageBox.information(self.app.activeWindow(), 
-                "Heater Control", "Heater on/off control stopped.")
+                "Heater Control", "Heater open loop control stopped.")
         
             
     def set_dc_motor_open_loop(self) -> None:
@@ -433,14 +433,14 @@ class UserInterface():
 
     def set_start_device(self) -> None:
         """Set start device flag"""
-        if self.heater_on_off_enabled:
+        if self.heater_open_loop_enabled:  # Cambiar la condición
             QMessageBox.warning(self.app.activeWindow(), 
-                              "Control Error",
-                              "Cannot start Close Loop while on&off control is running.\n"
-                              "Please restart the program.")
+                "Control Error",
+                "Cannot start Close Loop while open loop control is running.\n"
+                "Please restart the program.")
             return
         QMessageBox.information(self.app.activeWindow(), "Device Start",
-                                "Device is starting.")
+            "Device is starting.")
         self.device_started = True
 
     def set_calibrate_motor(self) -> None:
