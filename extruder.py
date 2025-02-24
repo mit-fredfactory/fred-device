@@ -52,7 +52,7 @@ class Extruder:
     STEPS_PER_REVOLUTION = 200
     DEFAULT_RPM = 0.6 # TODO: Delay is not being used, will be removed temporarily
     SAMPLE_TIME = 0.1
-    MAX_OUTPUT = 1
+    MAX_OUTPUT = 100
     MIN_OUTPUT = 0
 
     def __init__(self, gui: UserInterface) -> None:
@@ -101,7 +101,7 @@ class Extruder:
     def set_motor_speed(self, rpm: float) -> None:
         """Set motor speed in RPM"""
         steps_per_second = (rpm * Extruder.STEPS_PER_REVOLUTION) / 60
-        frequency = steps_per_second * 2  # Each cycle is two steps
+        frequency = steps_per_second   # Each cycle is two steps
         self.pwm.ChangeFrequency(frequency)
         self.pwm.ChangeDutyCycle(50)
 
@@ -140,8 +140,9 @@ class Extruder:
                 output = Extruder.MAX_OUTPUT
             elif output < Extruder.MIN_OUTPUT:
                 output = Extruder.MIN_OUTPUT
-            GPIO.output(Extruder.HEATER_PIN,
-                        GPIO.HIGH if output > 0 else GPIO.LOW)
+            
+            self.heater_pwm.ChangeDutyCycle(output)
+            
             self.gui.temperature_plot.update_plot(current_time, temperature,target_temperature)
             
             Database.temperature_timestamps.append(current_time)
