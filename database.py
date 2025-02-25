@@ -25,9 +25,10 @@ class Database():
 
     spooler_delta_time = []
     spooler_setpoint = []
+    spooler_kp = []
+    spooler_ki = []
+    spooler_kd = []
     spooler_rpm = []
-    spooler_gain = []
-    spooler_oscilation_period = []
 
     fan_duty_cycle = []
 
@@ -85,7 +86,7 @@ class Database():
             writer.writerow(["MOTOR DATA"])
             writer.writerow(["Timestamp (s)", "Extruder RPM",
                            "Spooler setpoint (RPM)", "Spooler RPM",
-                           "Spooler gain", "Spooler oscilation period"])
+                           "Spooler Kp", "Spooler Ki", "Spooler Kd"])
             
             motor_samples = len([x for x in cls.spooler_rpm if x != ""])
             for i in range(motor_samples):
@@ -93,8 +94,9 @@ class Database():
                       cls.extruder_rpm[i] if i < len(cls.extruder_rpm) else "",
                       cls.spooler_setpoint[i] if i < len(cls.spooler_setpoint) else "",
                       cls.spooler_rpm[i] if i < len(cls.spooler_rpm) else "",
-                      cls.spooler_gain[i] if i < len(cls.spooler_gain) else "",
-                      cls.spooler_oscilation_period[i] if i < len(cls.spooler_oscilation_period) else ""]
+                      cls.spooler_kp[i] if i < len(cls.spooler_kp) else "",  
+                      cls.spooler_ki[i] if i < len(cls.spooler_ki) else "",  
+                      cls.spooler_kd[i] if i < len(cls.spooler_kd) else ""]  
                 writer.writerow(row)
         print(f"CSV file {filename} generated.")
 

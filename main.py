@@ -34,9 +34,12 @@ def hardware_control(gui: UserInterface) -> None:
                 gui.start_motor_calibration = False
                 
             # DC Motor Control Logic
-            if gui.dc_motor_open_loop_enabled and not gui.spooling_control_state:
+            if gui.dc_motor_open_loop_enabled and not gui.dc_motor_close_loop_enabled:
                 spooler.dc_motor_open_loop_control(current_time)
                 
+            elif gui.dc_motor_close_loop_enabled and not gui.dc_motor_open_loop_enabled:
+                spooler.dc_motor_close_loop_control(current_time)
+            
             # Heater Control Logic
             if gui.heater_open_loop_enabled and not gui.device_started:  
                 extruder.temperature_open_loop_control(current_time)     
@@ -48,12 +51,9 @@ def hardware_control(gui: UserInterface) -> None:
                             
             elif gui.device_started:
                 extruder.temperature_control_loop(current_time)
-                
                 extruder.stepper_control_loop()
                 
-                if gui.spooling_control_state and not gui.dc_motor_open_loop_enabled:
-                    spooler.motor_control_loop(current_time)
-                fan.control_loop()
+            fan.control_loop()
             time.sleep(0.05)
         except Exception as e:
             print(f"Error in hardware control loop: {e}")
