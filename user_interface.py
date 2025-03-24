@@ -58,8 +58,9 @@ class UserInterface():
             self.show_message("Camera calibration data not found",
                               "Please calibrate the camera.")
             self.fiber_camera.diameter_coefficient = 0.00782324
-        self.layout.addWidget(self.fiber_camera.raw_image, 2, 8, 11, 1)
-        self.layout.addWidget(self.fiber_camera.processed_image, 13, 8, 11, 1)
+        self.layout.addWidget(self.fiber_camera.raw_image, 2, 8, 6, 1)
+        self.layout.addWidget(self.fiber_camera.canny_image, 9, 8, 6, 1)
+        self.layout.addWidget(self.fiber_camera.processed_image, 16, 8, 6, 1)
 
         self.add_buttons()
         
@@ -170,8 +171,8 @@ class UserInterface():
         extrusion_motor_speed.setSingleStep(0.1)
         extrusion_motor_speed.setDecimals(2)
 
-        self.layout.addWidget(extrusion_motor_speed_label, 12, 6)
-        self.layout.addWidget(extrusion_motor_speed, 13, 6)
+        self.layout.addWidget(extrusion_motor_speed_label, 11, 6)
+        self.layout.addWidget(extrusion_motor_speed, 12, 6)
         return extrusion_motor_speed
     
 
@@ -179,7 +180,7 @@ class UserInterface():
                                                   QDoubleSpinBox, QDoubleSpinBox]:
         """Add UI controls for the temperature"""
         font_style = "font-size: %ipx; font-weight: bold;"
-        target_temperature_label = QLabel("Temperature (C)")
+        target_temperature_label = QLabel("Temperature Setpoint(C)") #NEW
         target_temperature_label.setStyleSheet(font_style % 16)
         target_temperature = QSlider(Qt.Horizontal)
         target_temperature.setMinimum(65)
@@ -289,7 +290,7 @@ class UserInterface():
         motor_close_loop.setStyleSheet(font_style)
         motor_close_loop.clicked.connect(self.set_motor_close_loop)
         
-        start_device = QPushButton("Start device")
+        start_device = QPushButton("Start Temperature Close Loop")
         start_device.setStyleSheet(font_style)
         start_device.clicked.connect(self.set_start_device)
         
@@ -336,7 +337,7 @@ class UserInterface():
         
         self.layout.addWidget(camera_feedback, 9, 9)
         self.layout.addWidget(motor_close_loop, 2, 6) #NEW
-        self.layout.addWidget(start_device, 1, 0)
+        self.layout.addWidget(start_device, 13, 6) #NEW
         self.layout.addWidget(calibrate_motor, 1, 1)
         self.layout.addWidget(calibrate_camera, 1, 2)
         self.layout.addWidget(download_csv, 24, 6)
@@ -517,7 +518,7 @@ class UserInterface():
             self.setpoint_data.append(setpoint)
             
             #Change the legend to show the current value
-            self.progress_line.set_label(f"{self.axes.get_title()}: {y:.1f}")
+            self.progress_line.set_label(f"{self.axes.get_title()}: {y:.2f}")
             self.axes.legend()
 
             self.progress_line.set_data(self.x_data, self.y_data)
@@ -526,4 +527,3 @@ class UserInterface():
             self.axes.relim()
             self.axes.autoscale_view()
             self.draw()
-
