@@ -19,6 +19,7 @@ class FiberCamera(QWidget):
     def __init__(self, target_diameter: QDoubleSpinBox, gui: 'UserInterface') -> None: #new check
         super().__init__()
         self.raw_image = QLabel()
+        self.canny_image = QLabel()
         self.processed_image = QLabel()
         self.target_diameter = target_diameter
         self.capture = cv2.VideoCapture(0)
@@ -40,8 +41,8 @@ class FiberCamera(QWidget):
         edges, binary_frame = self.get_edges(frame)
         # Get diameter from the binary image
         # TODO: Tune and set to constants for fiber line detection
-        detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 50,
-                                         minLineLength=80, maxLineGap=20)
+        detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 30,
+                                         minLineLength=30, maxLineGap=100)
         fiber_diameter = self.get_fiber_diameter(detected_lines)
         # Plot lines on the frame
         frame = self.plot_lines(frame, detected_lines)
@@ -58,6 +59,11 @@ class FiberCamera(QWidget):
         image_for_gui = QImage(frame, frame.shape[1], frame.shape[0],
                                 QImage.Format_RGB888)
         self.raw_image.setPixmap(QPixmap(image_for_gui))
+        
+        # Display Canny
+        image_for_gui = QImage(edges, edges.shape[1], edges.shape[0],
+                                QImage.Format_Grayscale8)
+        self.canny_image.setPixmap(QPixmap(image_for_gui))
 
         # Binary Image
         image_for_gui = QImage(binary_frame, binary_frame.shape[1],
@@ -72,7 +78,7 @@ class FiberCamera(QWidget):
         frame = cv2.dilate(frame, kernel, iterations=2) #new check change 1 to 2
         gaussian_blurred = cv2.GaussianBlur(frame, (5, 5), 0) 
         threshold_value, binary_frame = cv2.threshold(
-            gaussian_blurred, 127, 255, cv2.THRESH_BINARY)
+            gaussian_blurred, 100, 255, cv2.THRESH_BINARY)
         #print(f'Threshold value: {threshold_value}')
 
         if FiberCamera.use_binary_for_edges is False:
@@ -129,7 +135,7 @@ class FiberCamera(QWidget):
 
     def calibrate(self):
         """Calibrate the camera"""
-        num_samples = 20
+        num_samples = 50
         accumulated_diameter = 0
         average_diameter = 0
         valid_samples = 0
@@ -139,8 +145,8 @@ class FiberCamera(QWidget):
             assert success, "Failed to capture frame"  # Check if frame is captured
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             edges, _ = self.get_edges(frame)
-            detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 80,
-                                         minLineLength=60, maxLineGap=10)
+            detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 30,
+                                         minLineLength=30, maxLineGap=100)
             fiber_diameter = self.get_fiber_diameter_noC(detected_lines)
             if fiber_diameter is not None:
                 accumulated_diameter += fiber_diameter
@@ -149,10 +155,10 @@ class FiberCamera(QWidget):
         if valid_samples > 0:
             average_diameter = accumulated_diameter / valid_samples
         
-        print(f"Average width of wire: {average_diameter} mm")
+        print(f"Average width of wire: {average_diameter} pixels")
 
-        self.diameter_coefficient = 0.8/average_diameter #new check
-        print(f"Diameter_coeff: {self.diameter_coefficient} mm")
+        self.diameter_coefficient = 1.2/average_diameter #new check
+        print(f"Diameter_coeff: {self.diameter_coefficient} ")
 
         Database.update_calibration_data("diameter_coefficient", 
                                          str(self.diameter_coefficient))
@@ -168,8 +174,8 @@ class FiberCamera(QWidget):
             frame = frame[height//4:3*height//4, :]
             
             edges, binary_frame = self.get_edges(frame)
-            detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 50,
-                                         minLineLength=80, maxLineGap=20)
+            detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 30,
+                                         minLineLength=30, maxLineGap=100)
             
             # Si no hay líneas detectadas, graficar cero
             current_diameter = self.get_fiber_diameter(detected_lines)
