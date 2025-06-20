@@ -330,7 +330,7 @@ class UserInterface():
 #         break_level3.setStyleSheet(font_style)
 #         break_level3.clicked.connect(self.set_break_level3)
         
-        camera_feedback = QPushButton("Start camera feedback")
+        camera_feedback = QPushButton("Start Camera Feed")
         camera_feedback.setStyleSheet(font_style)
         camera_feedback.clicked.connect(self.set_camera_feedback)
         
