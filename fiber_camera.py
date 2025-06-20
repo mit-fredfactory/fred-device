@@ -106,7 +106,7 @@ class FiberCamera(QWidget):
         return (((leftmost_max - leftmost_min) + (rightmost_max - rightmost_min))
                 / 2 * self.diameter_coefficient )
     
-    def get_fiber_diameter_noC(self, lines): #NEW CHECK QUICK FIX
+    def get_fiber_diameter_in_pixels(self, lines): #NEW CHECK QUICK FIX
         """Get the fiber diameter from the edges detected in the image"""
         leftmost_min = sys.maxsize
         leftmost_max = 0
@@ -147,7 +147,7 @@ class FiberCamera(QWidget):
             edges, _ = self.get_edges(frame)
             detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 30,
                                          minLineLength=30, maxLineGap=100)
-            fiber_diameter = self.get_fiber_diameter_noC(detected_lines)
+            fiber_diameter = self.get_fiber_diameter_in_pixels(detected_lines)
             if fiber_diameter is not None:
                 accumulated_diameter += fiber_diameter
                 valid_samples += 1
@@ -157,7 +157,7 @@ class FiberCamera(QWidget):
         
         print(f"Average width of wire: {average_diameter} pixels")
 
-        self.diameter_coefficient = 1.2/average_diameter #new check
+        self.diameter_coefficient = 0.94/average_diameter #new check
         print(f"Diameter_coeff: {self.diameter_coefficient} ")
 
         Database.update_calibration_data("diameter_coefficient", 
