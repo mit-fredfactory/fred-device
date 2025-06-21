@@ -213,7 +213,7 @@ class UserInterface():
         temperature_kd.setSingleStep(0.001)
         temperature_kd.setMinimum(0.0)
         temperature_kd.setMaximum(2.0)
-        temperature_kd.setValue(0.05)
+        temperature_kd.setValue(0.6)
 
 
         self.layout.addWidget(target_temperature_label, 14, 6)
