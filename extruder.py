@@ -110,6 +110,7 @@ class Extruder:
         try:
             setpoint_rpm = self.gui.extrusion_motor_speed.value()
             self.pwm.ChangeDutyCycle(0)
+            #commented to test mqtt integration
             # if setpoint_rpm > 0.0:
             #     self.set_motor_speed(setpoint_rpm)
             self.set_motor_speed(setpoint_rpm)
