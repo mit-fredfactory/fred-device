@@ -1,12 +1,21 @@
 """Main file to run the FrED device"""
 import threading
 import time
+import json
 import RPi.GPIO as GPIO
 from database import Database
 from user_interface import UserInterface
 from fan import Fan
 from spooler import Spooler
 from extruder import Extruder
+from mqtt_client import MQTTClient
+
+CLIENT_ID = 'fred_device1'
+MQTT_TOPIC = 'mit/fred/device1'
+BATCH_INTERVAL = 5.0 # seconds
+
+buffer_lock = threading.Lock()
+
 
 def hardware_control(gui: UserInterface) -> None:
     """Thread to handle hardware control"""
@@ -63,14 +72,74 @@ def hardware_control(gui: UserInterface) -> None:
             spooler.stop()
             extruder.stop()
 
+def mqtt_control(mqtt_client: MQTTClient) -> None:
+    prev_len_fan_duty_cycle = 0
+
+    while True:
+        new_data_flag = False
+
+        with buffer_lock:
+            curr_len_fan_duty_cycle = len(Database.fan_duty_cycle)
+            if curr_len_fan_duty_cycle > prev_len_fan_duty_cycle: # check if new data exists
+
+                # create JSON message with arrays from lists
+                batch_to_send = {"fan_duty_cycle":Database.fan_duty_cycle[prev_len_fan_duty_cycle:curr_len_fan_duty_cycle]}
+                # mqtt_payload = {
+                #     "timestamp": round(time.time(), 2),
+                #     "heater_temp": 100
+                # }
+
+            else:
+                batch_to_send = []
+
+        if batch_to_send:
+            mqtt_payload = json.dumps(batch_to_send)
+            mqtt_client.try_publish(mqtt_payload)
+            
+            # result = client.publish(MQTT_TOPIC, payload) # original sending command
+            # try:    
+            #     mqtt_connection.publish(topic=MQTT_TOPIC, 
+            #                             payload=message_json, 
+            #                             qos=mqtt.QoS.AT_LEAST_ONCE)
+            #     print(f"Published batch to MQTT: {num_data_in_batch} Images")
+            # except:
+            #     print("Failed to send message")    
+        else:
+            print("\nNo data to send this cycle.\n")
+
+        time.sleep(5)
+
+
 if __name__ == "__main__":
+    
     print("Starting FrED Device...")
     ui = UserInterface()
     time.sleep(2)
+
+    print("Starting MQTT Client...")
+    mqtt_client = MQTTClient(topic = MQTT_TOPIC)
+    mqtt_client._connect()
+    time.sleep(2)
+
+
     hardware_thread = threading.Thread(target=hardware_control, args=(ui,))
+    mqtt_thread = threading.Thread(target=mqtt_control, args=(mqtt_client,))
+
     hardware_thread.start()
+    mqtt_thread.start()
     threading.Lock()
-    ui.start_gui()
+
+    # Start GUI (blocking)
+    try:
+        ui.start_gui()
+    except KeyboardInterrupt:
+        print("GUI stopped.")
+
+
+    # Cleanup
+    mqtt_client.disconnect()
     hardware_thread.join()
     print("FrED Device Closed.")
+    
+
 
