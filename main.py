@@ -92,9 +92,9 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
                     }
 
             else:
-                batch_to_send = []
+                batch_to_send_spooling = []
 
-        if batch_to_send:
+        if batch_to_send_spooling:
             # mqtt_payload_spooling = json.dumps(batch_to_send_spooling)
             mqtt_client.try_publish(batch_to_send_spooling, 'spooling')
             
