@@ -54,7 +54,7 @@ class MQTTClient:
                     payload=message_json,
                     qos=mqtt.QoS.AT_LEAST_ONCE
                 )
-                print(f"[MQTT] Published: {message_json}")
+                print(f"[MQTT] Published (topic: {self.topic + mqtt_subtopic}): {message_json}")
                 # self.last_publish_time = current_time
             except Exception as e:
                 print(f"[MQTT] Publish failed: {e}")
