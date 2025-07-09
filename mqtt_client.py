@@ -55,7 +55,7 @@ class MQTTClient:
                     qos=mqtt.QoS.AT_LEAST_ONCE
                 )
                 print(f"[MQTT] Published: {message_json}")
-                self.last_publish_time = current_time
+                # self.last_publish_time = current_time
             except Exception as e:
                 print(f"[MQTT] Publish failed: {e}")
 
