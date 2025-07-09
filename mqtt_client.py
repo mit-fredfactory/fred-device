@@ -45,19 +45,19 @@ class MQTTClient:
     def try_publish(self, mqtt_subtopic: str, payload_dict: dict):
         """Publish data if publish_interval has passed."""
         with self.lock:
-            current_time = time.time()
-            if current_time - self.last_publish_time >= self.publish_interval:
-                try:
-                    message_json = json.dumps(payload_dict)
-                    self.connection.publish(
-                        topic=self.topic + mqtt_subtopic,
-                        payload=message_json,
-                        qos=mqtt.QoS.AT_LEAST_ONCE
-                    )
-                    print(f"[MQTT] Published: {message_json}")
-                    self.last_publish_time = current_time
-                except Exception as e:
-                    print(f"[MQTT] Publish failed: {e}")
+            # current_time = time.time()
+            # if current_time - self.last_publish_time >= self.publish_interval:
+            try:
+                message_json = json.dumps(payload_dict)
+                self.connection.publish(
+                    topic=self.topic + mqtt_subtopic,
+                    payload=message_json,
+                    qos=mqtt.QoS.AT_LEAST_ONCE
+                )
+                print(f"[MQTT] Published: {message_json}")
+                self.last_publish_time = current_time
+            except Exception as e:
+                print(f"[MQTT] Publish failed: {e}")
 
     def disconnect(self):
         if self.connection:

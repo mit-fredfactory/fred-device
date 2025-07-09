@@ -93,16 +93,10 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
                     "ki":Database.spooler_ki[prev_len_spooling:curr_len_spooling],
                     "kd":Database.spooler_kd[prev_len_spooling:curr_len_spooling]
                     }
-                    
-                print("Spooler actual",Database.spooler_rpm[prev_len_spooling:curr_len_spooling])
-                print("Spooler KD",Database.spooler_kd[prev_len_spooling:curr_len_spooling])
-                
-                print('batchtosendspooling\n',batch_to_send_spooling)
-
-                # batch_to_send_extruder_motor = {
-                #     "timestamp":Database.spooler_timestamps[prev_len_spooling:curr_len_spooling],
-                #     "actual":Database.extruder_rpm[prev_len_spooling:curr_len_spooling]
-                #     }
+                batch_to_send_extruder_motor = {
+                    "timestamp":Database.spooler_timestamps[prev_len_spooling:curr_len_spooling],
+                    "actual":Database.extruder_rpm[prev_len_spooling:curr_len_spooling]
+                    }
             else:
                 batch_to_send_spooling = []
                 # batch_to_send_extruder_motor = []
@@ -145,8 +139,8 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
             mqtt_payload_spooling = json.dumps(batch_to_send_spooling)
             mqtt_client.try_publish('spooling', mqtt_payload_spooling)   
 
-            # mqtt_payload_extruder_motor = json.dumps(batch_to_send_extruder_motor)
-            # mqtt_client.try_publish('extruder_motor', mqtt_payload_extruder_motor)
+            mqtt_payload_extruder_motor = json.dumps(batch_to_send_extruder_motor)
+            mqtt_client.try_publish('extruder_motor', mqtt_payload_extruder_motor)
 
             prev_len_spooling = curr_len_spooling
         else:
