@@ -74,8 +74,8 @@ def hardware_control(gui: UserInterface) -> None:
 
 def mqtt_control(mqtt_client: MQTTClient) -> None:
     prev_len_spooling = 0
-    prev_len_heater = 0
-    prev_len_cooling = 0
+    # prev_len_heater = 0
+    # prev_len_cooling = 0
 
     while True:
 
@@ -93,79 +93,79 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
                     "actual":Database.spooler_ki[prev_len_spooling:curr_len_spooling],
                     "actual":Database.spooler_kd[prev_len_spooling:curr_len_spooling]
                     }
-                batch_to_send_extruder_motor = {
-                    "timestamp":Database.spooler_timestamps[prev_len_spooling:curr_len_spooling],
-                    "actual":Database.extruder_rpm[prev_len_spooling:curr_len_spooling]
-                    }
+                # batch_to_send_extruder_motor = {
+                #     "timestamp":Database.spooler_timestamps[prev_len_spooling:curr_len_spooling],
+                #     "actual":Database.extruder_rpm[prev_len_spooling:curr_len_spooling]
+                #     }
             else:
                 batch_to_send_spooling = []
-                batch_to_send_extruder_motor = []
+                # batch_to_send_extruder_motor = []
 
-            # Heater
-            curr_len_heater = len(Database.temperature_timestamps)
-            if curr_len_heater > prev_len_heater: # check if new data exists
-                # create JSON message with arrays from lists
-                batch_to_send_heater = {
-                    "timestamp":Database.temperature_timestamps[prev_len_heater:curr_len_heater],
-                    "actual":Database.temperature_readings[prev_len_heater:curr_len_heater],
-                    "setpoint":Database.temperature_setpoint[prev_len_heater:curr_len_heater],
-                    "duty_cycle":Database.temperature_pid_output[prev_len_heater:curr_len_heater],
-                    "kp":Database.temperature_kp[prev_len_heater:curr_len_heater],
-                    "ki":Database.temperature_ki[prev_len_heater:curr_len_heater],
-                    "kd":Database.temperature_kd[prev_len_heater:curr_len_heater],
-                    }
-            else:
-                batch_to_send_heater = []
+            # # Heater
+            # curr_len_heater = len(Database.temperature_timestamps)
+            # if curr_len_heater > prev_len_heater: # check if new data exists
+            #     # create JSON message with arrays from lists
+            #     batch_to_send_heater = {
+            #         "timestamp":Database.temperature_timestamps[prev_len_heater:curr_len_heater],
+            #         "actual":Database.temperature_readings[prev_len_heater:curr_len_heater],
+            #         "setpoint":Database.temperature_setpoint[prev_len_heater:curr_len_heater],
+            #         "duty_cycle":Database.temperature_pid_output[prev_len_heater:curr_len_heater],
+            #         "kp":Database.temperature_kp[prev_len_heater:curr_len_heater],
+            #         "ki":Database.temperature_ki[prev_len_heater:curr_len_heater],
+            #         "kd":Database.temperature_kd[prev_len_heater:curr_len_heater],
+            #         }
+            # else:
+            #     batch_to_send_heater = []
 
-            # Diameter + Cooling
-            curr_len_cooling = len(Database.camera_timestamps)
-            if curr_len_cooling > prev_len_cooling: # check if new data exists
-                # create JSON message with arrays from lists
-                batch_to_send_cooling = {
-                    "timestamp":Database.camera_timestamps[prev_len_cooling:curr_len_cooling],
-                    "duty_cycle":Database.fan_duty_cycle[prev_len_cooling:curr_len_cooling]
-                    }
-                batch_to_send_diameter = {
-                    "timestamp":Database.camera_timestamps[prev_len_cooling:curr_len_cooling],
-                    "actual":Database.diameter_readings[prev_len_cooling:curr_len_cooling],
-                    "setpoint":Database.diameter_setpoint[prev_len_cooling:curr_len_cooling]
-                    }                
-            else:
-                batch_to_send_cooling = []
-                batch_to_send_diameter = []
+            # # Diameter + Cooling
+            # curr_len_cooling = len(Database.camera_timestamps)
+            # if curr_len_cooling > prev_len_cooling: # check if new data exists
+            #     # create JSON message with arrays from lists
+            #     batch_to_send_cooling = {
+            #         "timestamp":Database.camera_timestamps[prev_len_cooling:curr_len_cooling],
+            #         "duty_cycle":Database.fan_duty_cycle[prev_len_cooling:curr_len_cooling]
+            #         }
+            #     batch_to_send_diameter = {
+            #         "timestamp":Database.camera_timestamps[prev_len_cooling:curr_len_cooling],
+            #         "actual":Database.diameter_readings[prev_len_cooling:curr_len_cooling],
+            #         "setpoint":Database.diameter_setpoint[prev_len_cooling:curr_len_cooling]
+            #         }                
+            # else:
+            #     batch_to_send_cooling = []
+            #     batch_to_send_diameter = []
 
         # Spooling + Extruder Motor
         if batch_to_send_spooling:
             mqtt_payload_spooling = json.dumps(batch_to_send_spooling)
             mqtt_client.try_publish('spooling', mqtt_payload_spooling)   
 
-            mqtt_payload_extruder_motor = json.dumps(batch_to_send_extruder_motor)
-            mqtt_client.try_publish('extruder_motor', mqtt_payload_extruder_motor)
+            # mqtt_payload_extruder_motor = json.dumps(batch_to_send_extruder_motor)
+            # mqtt_client.try_publish('extruder_motor', mqtt_payload_extruder_motor)
 
             prev_len_spooling = curr_len_spooling
         else:
             print("\nNo Spooling and Extruder Motor data to send this cycle.\n")
         
-        # Heater
-        if batch_to_send_heater:
-            mqtt_payload_heater = json.dumps(batch_to_send_heater)
-            mqtt_client.try_publish('extruder_heater', mqtt_payload_heater)   
+        # # Heater
+        # if batch_to_send_heater:
+        #     mqtt_payload_heater = json.dumps(batch_to_send_heater)
+        #     mqtt_client.try_publish('extruder_heater', mqtt_payload_heater)   
 
-            prev_len_heater = curr_len_heater
-        else:
-            print("\nNo Extruder Heater data to send this cycle.\n")
+        #     prev_len_heater = curr_len_heater
+        # else:
+        #     print("\nNo Extruder Heater data to send this cycle.\n")
         
-        # Diameter + Cooling
-        if batch_to_send_cooling:
-            mqtt_payload_cooling = json.dumps(batch_to_send_cooling)
-            mqtt_client.try_publish('cooling', mqtt_payload_cooling)   
+        # # Diameter + Cooling
+        # if batch_to_send_cooling:
+        #     mqtt_payload_cooling = json.dumps(batch_to_send_cooling)
+        #     mqtt_client.try_publish('cooling', mqtt_payload_cooling)   
 
-            mqtt_payload_diameter = json.dumps(batch_to_send_diameter)
-            mqtt_client.try_publish('diameter', mqtt_payload_diameter)
+        #     mqtt_payload_diameter = json.dumps(batch_to_send_diameter)
+        #     mqtt_client.try_publish('diameter', mqtt_payload_diameter)
                
-            prev_len_cooling = curr_len_cooling
-        else:
-            print("\nNo Diameter and Cooling data to send this cycle.\n")
+        #     prev_len_cooling = curr_len_cooling
+        # else:
+        #     print("\nNo Diameter and Cooling data to send this cycle.\n")
         
         time.sleep(5)
 
