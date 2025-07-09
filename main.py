@@ -74,8 +74,8 @@ def hardware_control(gui: UserInterface) -> None:
 
 def mqtt_control(mqtt_client: MQTTClient) -> None:
     prev_len_spooling = 0
-    # prev_len_heater = 0
-    # prev_len_cooling = 0
+    prev_len_heater = 0
+    prev_len_cooling = 0
 
     while True:
 
