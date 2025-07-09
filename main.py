@@ -36,7 +36,7 @@ def hardware_control(gui: UserInterface) -> None:
     init_time = time.time()
     while True:
         try:
-            current_time = time.time() - init_time
+            current_time = time.time() #- init_time
             Database.time_readings.append(current_time)
             if gui.start_motor_calibration:
                 spooler.calibrate()
