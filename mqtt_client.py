@@ -42,7 +42,7 @@ class MQTTClient:
         connect_future.result()
         print("MQTT connection established.")
 
-    def try_publish(self, mqtt_subtopic: str, payload_dict: dict):
+    def try_publish(self, payload_dict: dict):
         """Publish data if publish_interval has passed."""
         with self.lock:
             current_time = time.time()
@@ -50,7 +50,7 @@ class MQTTClient:
                 try:
                     message_json = json.dumps(payload_dict)
                     self.connection.publish(
-                        topic=self.topic + mqtt_subtopic,
+                        topic=self.topic,
                         payload=message_json,
                         qos=mqtt.QoS.AT_LEAST_ONCE
                     )
