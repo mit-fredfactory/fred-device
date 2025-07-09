@@ -105,7 +105,7 @@ class Extruder:
         self.pwm.ChangeFrequency(frequency)
         self.pwm.ChangeDutyCycle(50)
 
-    def stepper_control_loop(self) -> None:
+    def stepper_control_loop(self, current_time) -> None:
         """Control stepper motor speed"""
         try:
             setpoint_rpm = self.gui.extrusion_motor_speed.value()
@@ -113,6 +113,7 @@ class Extruder:
             if setpoint_rpm > 0.0:
                 self.set_motor_speed(setpoint_rpm)
             Database.extruder_rpm.append(setpoint_rpm)
+            Database.extruder_timestamps.append(current_time)
         except Exception as e:
             print(f"Error in stepper control loop: {e}")
             self.gui.show_message("Error", "Stepper control loop error")

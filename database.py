@@ -9,6 +9,7 @@ class Database():
     temperature_timestamps = []  # For future temperature measurements
     spooler_timestamps = []  # For future spooler measurements
     cooling_timestamps = []
+    extruder_timestamps = []
 
     temperature_delta_time = []
     temperature_readings = []
@@ -18,6 +19,7 @@ class Database():
     temperature_kp = []
     temperature_ki = []
     temperature_kd = []
+    
     extruder_rpm = []
     
     diameter_delta_time = []

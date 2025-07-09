@@ -52,7 +52,7 @@ def hardware_control(gui: UserInterface) -> None:
             # Heater Control Logic
             if gui.heater_open_loop_enabled and not gui.device_started:  
                 extruder.temperature_open_loop_control(current_time)     
-                extruder.stepper_control_loop()
+                extruder.stepper_control_loop(current_time)
             
             # Camera Feedback PLOT OPEN LOOP
             if gui.camera_feedback_enabled:
@@ -60,7 +60,7 @@ def hardware_control(gui: UserInterface) -> None:
                             
             if gui.device_started:
                 extruder.temperature_control_loop(current_time)
-                extruder.stepper_control_loop()
+                extruder.stepper_control_loop(current_time)
                 
             fan.control_loop(current_time)
             time.sleep(0.05)
@@ -77,6 +77,7 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
     prev_len_heater = 0
     prev_len_cooling = 0
     prev_len_camera = 0
+    prev_len_extruder = 0
 
     while True:
 
@@ -94,13 +95,19 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
                     "ki":Database.spooler_ki[prev_len_spooling:curr_len_spooling],
                     "kd":Database.spooler_kd[prev_len_spooling:curr_len_spooling]
                     }
-                batch_to_send_extruder_motor = {
-                    "timestamp":Database.spooler_timestamps[prev_len_spooling:curr_len_spooling],
-                    "actual":Database.extruder_rpm[prev_len_spooling:curr_len_spooling]
-                    }
             else:
                 batch_to_send_spooling = []
-                # batch_to_send_extruder_motor = []
+            
+            # Extruder Motor
+            curr_len_extruder = len(Database.extruder_timestamps)
+            if curr_len_extruder > prev_len_extruder: # check if new data exists
+                # create JSON message with arrays from lists
+                batch_to_send_extruder_motor = {
+                    "timestamp":Database.extruder_timestamps[prev_len_extruder:curr_len_extruder],
+                    "actual":Database.extruder_rpm[prev_len_extruder:curr_len_extruder]
+                    }
+            else:
+                batch_to_send_extruder_motor = [] 
 
             # Heater
             curr_len_heater = len(Database.temperature_timestamps)
@@ -141,17 +148,23 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
             else:
                 batch_to_send_diameter = []
 
-        # Spooling + Extruder Motor
+        # Spooling 
         if batch_to_send_spooling:
             mqtt_payload_spooling = json.dumps(batch_to_send_spooling)
             mqtt_client.try_publish('spooling', mqtt_payload_spooling)   
 
+            prev_len_spooling = curr_len_spooling
+        else:
+            print("\nNo Spooling data to send this cycle.\n")
+        
+        # Extruder Motor
+        if batch_to_send_extruder_motor:
             mqtt_payload_extruder_motor = json.dumps(batch_to_send_extruder_motor)
             mqtt_client.try_publish('extruder_motor', mqtt_payload_extruder_motor)
 
-            prev_len_spooling = curr_len_spooling
+            prev_len_extruder = curr_len_extruder
         else:
-            print("\nNo Spooling and Extruder Motor data to send this cycle.\n")
+            print("\nNo Extruder Motor data to send this cycle.\n")
         
         # Heater
         if batch_to_send_heater:
