@@ -123,7 +123,7 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
             if curr_len_cooling > prev_len_cooling: # check if new data exists
                 # create JSON message with arrays from lists
                 batch_to_send_cooling = {
-                    "timestamp":Database.camera_timestamps[prev_len_cooling:curr_len_cooling],
+                    "timestamp":Database.cooling_timestamps[prev_len_cooling:curr_len_cooling],
                     "duty_cycle":Database.fan_duty_cycle[prev_len_cooling:curr_len_cooling]
                     }             
             else:
@@ -134,9 +134,9 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
             if curr_len_camera > prev_len_camera: # check if new data exists
                 # create JSON message with arrays from lists
                 batch_to_send_diameter = {
-                    "timestamp":Database.camera_timestamps[prev_len_cooling:curr_len_cooling],
-                    "actual":Database.diameter_readings[prev_len_cooling:curr_len_cooling],
-                    "setpoint":Database.diameter_setpoint[prev_len_cooling:curr_len_cooling]
+                    "timestamp":Database.camera_timestamps[prev_len_camera:curr_len_camera],
+                    "actual":Database.diameter_readings[prev_len_camera:curr_len_camera],
+                    "setpoint":Database.diameter_setpoint[prev_len_camera:curr_len_camera]
                     }                
             else:
                 batch_to_send_diameter = []
