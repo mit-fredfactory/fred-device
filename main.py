@@ -1,6 +1,7 @@
 """Main file to run the FrED device"""
 import threading
 import time
+import json
 import RPi.GPIO as GPIO
 from database import Database
 from user_interface import UserInterface
@@ -12,6 +13,8 @@ from mqtt_client import MQTTClient
 CLIENT_ID = 'fred_device1'
 MQTT_TOPIC = 'mit/fred/device1'
 BATCH_INTERVAL = 5.0 # seconds
+
+buffer_lock = threading.Lock()
 
 
 def hardware_control(gui: UserInterface) -> None:
@@ -70,13 +73,40 @@ def hardware_control(gui: UserInterface) -> None:
             extruder.stop()
 
 def mqtt_control(mqtt_client: MQTTClient) -> None:
+    prev_len_fan_duty_cycle = 0
+
     while True:
-        # At end of loop, package message
-        mqtt_payload = {
-            "timestamp": round(time.time(), 2),
-            "heater_temp": 100
-        }
-        mqtt_client.try_publish(mqtt_payload)
+        new_data_flag = False
+
+        with buffer_lock:
+            curr_len_fan_duty_cycle = len(Database.fan_duty_cycle)
+            if curr_len_fan_duty_cycle > prev_len_fan_duty_cycle: # check if new data exists
+
+                # create JSON message with arrays from lists
+                batch_to_send = {"fan_duty_cycle":Database.fan_duty_cycle[prev_len_fan_duty_cycle:curr_len_fan_duty_cycle]}
+                # mqtt_payload = {
+                #     "timestamp": round(time.time(), 2),
+                #     "heater_temp": 100
+                # }
+
+            else:
+                batch_to_send = []
+
+        if batch_to_send:
+            mqtt_payload = json.dumps(batch_to_send)
+            mqtt_client.try_publish(mqtt_payload)
+            
+            # result = client.publish(MQTT_TOPIC, payload) # original sending command
+            # try:    
+            #     mqtt_connection.publish(topic=MQTT_TOPIC, 
+            #                             payload=message_json, 
+            #                             qos=mqtt.QoS.AT_LEAST_ONCE)
+            #     print(f"Published batch to MQTT: {num_data_in_batch} Images")
+            # except:
+            #     print("Failed to send message")    
+        else:
+            print("\nNo data to send this cycle.\n")
+
         time.sleep(5)
 
 
