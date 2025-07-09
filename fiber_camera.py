@@ -43,15 +43,20 @@ class FiberCamera(QWidget):
         # TODO: Tune and set to constants for fiber line detection
         detected_lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 30,
                                          minLineLength=30, maxLineGap=100)
-        fiber_diameter = self.get_fiber_diameter(detected_lines)
+        # fiber_diameter = self.get_fiber_diameter(detected_lines) # RUSSEL CHANGED
+        
         # Plot lines on the frame
         frame = self.plot_lines(frame, detected_lines)
+        
         # Emit the line_value_updated signal with the new line_value
         #self.line_value_updated.emit(line_value)
-        Database.camera_timestamps.append(current_time)
-        Database.diameter_readings.append(fiber_diameter)
-        Database.diameter_setpoint.append(self.target_diameter.value())
-        Database.diameter_delta_time.append(current_time - self.previous_time)
+
+        # Russel changed
+        # Database.camera_timestamps.append(current_time)
+        # Database.diameter_readings.append(fiber_diameter)
+        # Database.diameter_setpoint.append(self.target_diameter.value())
+        # Database.diameter_delta_time.append(current_time - self.previous_time)
+
         self.previous_time = current_time
         
 

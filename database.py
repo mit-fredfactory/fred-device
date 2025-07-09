@@ -8,6 +8,7 @@ class Database():
     camera_timestamps = []  # Timestamps for diameter measurements
     temperature_timestamps = []  # For future temperature measurements
     spooler_timestamps = []  # For future spooler measurements
+    cooling_timestamps = []
 
     temperature_delta_time = []
     temperature_readings = []
@@ -69,7 +70,8 @@ class Database():
             writer.writerow(["DIAMETER DATA"])
             writer.writerow(["Timestamp (s)", "Diameter (mm)",
                             "Diameter setpoint (mm)", "Fan duty cycle (%)"])
-        
+
+            #RUSSEL PLEASE CHECK
             diameter_samples = len(cls.diameter_readings)
             for i in range(diameter_samples):
                 row = [f"{cls.camera_timestamps[i]:.3f}" if i < len(cls.camera_timestamps) else "",

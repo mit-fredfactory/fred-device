@@ -62,7 +62,7 @@ def hardware_control(gui: UserInterface) -> None:
                 extruder.temperature_control_loop(current_time)
                 extruder.stepper_control_loop()
                 
-            fan.control_loop()
+            fan.control_loop(current_time)
             time.sleep(0.05)
         except Exception as e:
             print(f"Error in hardware control loop: {e}")
@@ -76,6 +76,7 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
     prev_len_spooling = 0
     prev_len_heater = 0
     prev_len_cooling = 0
+    prev_len_camera = 0
 
     while True:
 
@@ -117,21 +118,27 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
             else:
                 batch_to_send_heater = []
 
-            # Diameter + Cooling
-            curr_len_cooling = len(Database.camera_timestamps)
+            # Cooling
+            curr_len_cooling = len(Database.cooling_timestamps)
             if curr_len_cooling > prev_len_cooling: # check if new data exists
                 # create JSON message with arrays from lists
                 batch_to_send_cooling = {
                     "timestamp":Database.camera_timestamps[prev_len_cooling:curr_len_cooling],
                     "duty_cycle":Database.fan_duty_cycle[prev_len_cooling:curr_len_cooling]
-                    }
+                    }             
+            else:
+                batch_to_send_cooling = []
+            
+            # Diameter 
+            curr_len_camera = len(Database.camera_timestamps)
+            if curr_len_camera > prev_len_camera: # check if new data exists
+                # create JSON message with arrays from lists
                 batch_to_send_diameter = {
                     "timestamp":Database.camera_timestamps[prev_len_cooling:curr_len_cooling],
                     "actual":Database.diameter_readings[prev_len_cooling:curr_len_cooling],
                     "setpoint":Database.diameter_setpoint[prev_len_cooling:curr_len_cooling]
                     }                
             else:
-                batch_to_send_cooling = []
                 batch_to_send_diameter = []
 
         # Spooling + Extruder Motor
@@ -155,17 +162,23 @@ def mqtt_control(mqtt_client: MQTTClient) -> None:
         else:
             print("\nNo Extruder Heater data to send this cycle.\n")
         
-        # Diameter + Cooling
+        # Cooling
         if batch_to_send_cooling:
             mqtt_payload_cooling = json.dumps(batch_to_send_cooling)
             mqtt_client.try_publish('cooling', mqtt_payload_cooling)   
 
+            prev_len_cooling = curr_len_cooling
+        else:
+            print("\nNo Cooling data to send this cycle.\n")
+        
+        # Diameter 
+        if batch_to_send_diameter:
             mqtt_payload_diameter = json.dumps(batch_to_send_diameter)
             mqtt_client.try_publish('diameter', mqtt_payload_diameter)
                
-            prev_len_cooling = curr_len_cooling
+            prev_len_camera = curr_len_camera
         else:
-            print("\nNo Diameter and Cooling data to send this cycle.\n")
+            print("\nNo Diameter data to send this cycle.\n")
         
         time.sleep(5)
 
