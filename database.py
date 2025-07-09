@@ -103,16 +103,16 @@ class Database():
     @staticmethod
     def get_calibration_data(field: str) -> float:
         """Get calibration data from the yaml file"""
-        with open("./fred-device/calibration.yaml", "r", encoding="utf-8") as file:
+        with open("calibration.yaml", "r", encoding="utf-8") as file:
             calibration_data = yaml.unsafe_load(file)
         return calibration_data[field]
 
     @staticmethod
     def update_calibration_data(field: str, value: str) -> None:
         """Update calibration data in the yaml file"""
-        with open("./fred-device/calibration.yaml", "r") as file:
+        with open("calibration.yaml", "r") as file:
             calibration_data = yaml.unsafe_load(file)
-        with open("./fred-device/calibration.yaml", "w") as file:
+        with open("calibration.yaml", "w") as file:
             calibration_data[field] = float(value)
             yaml.dump(calibration_data, file)
 
