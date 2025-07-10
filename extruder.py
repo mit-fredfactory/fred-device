@@ -21,7 +21,7 @@ class Thermistor:
     READINGS_TO_AVERAGE = 10
 
     @classmethod
-    def get_temperature(cls, voltage: float) -> float:
+    def get_temperature(cls, voltage: float) -> tuple[float, float]:
         """Get the average temperature from the voltage using Steinhart-Hart 
         equation"""
         if voltage < 0.0001 or voltage >= cls.VOLTAGE_SUPPLY:  # Prevenir división por cero
