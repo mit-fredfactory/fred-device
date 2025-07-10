@@ -20,12 +20,14 @@ class Thermistor:
     RESISTOR = 100000 # Ω
     READINGS_TO_AVERAGE = 10
 
+    average_temperature = 0
+
     @classmethod
     def get_temperature(cls, voltage: float) -> tuple[float, float]:
         """Get the average temperature from the voltage using Steinhart-Hart 
         equation"""
         if voltage < 0.0001 or voltage >= cls.VOLTAGE_SUPPLY:  # Prevenir división por cero
-            return 0
+            return 0.0, average_temperature #temporary fix
         resistance = ((cls.VOLTAGE_SUPPLY - voltage) * cls.RESISTOR )/ voltage
         ln = math.log(resistance / cls.RESISTANCE_AT_REFERENCE)
         temperature = (1 / ((ln / cls.BETA_COEFFICIENT) + (1 / cls.REFERENCE_TEMPERATURE))) - 273.15
