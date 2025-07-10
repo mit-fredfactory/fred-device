@@ -38,7 +38,7 @@ class Thermistor:
         else:
             average_temperature = ((sum(Database.temperature_readings)+temperature) /
                                    (len(Database.temperature_readings)+1))
-        return average_temperature
+        return temperature, average_temperature
 
 class Extruder:
     """Controller of the extrusion process: the heater and stepper motor"""
@@ -156,8 +156,7 @@ class Extruder:
             Database.temperature_kd.append(kd)
         except Exception as e:
             print(f"Error in temperature control loop: {e}")
-            self.gui.show_message("Error", "Error in temperature control loop",
-                                  "Please restart the program.")
+            self.gui.show_message("Error", "Error in temperature control loop. Please restart the program.")
             
     
     def temperature_open_loop_control(self, current_time: float) -> None:
