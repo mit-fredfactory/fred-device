@@ -29,16 +29,15 @@ class Thermistor:
         resistance = ((cls.VOLTAGE_SUPPLY - voltage) * cls.RESISTOR )/ voltage
         ln = math.log(resistance / cls.RESISTANCE_AT_REFERENCE)
         temperature = (1 / ((ln / cls.BETA_COEFFICIENT) + (1 / cls.REFERENCE_TEMPERATURE))) - 273.15
-        Database.temperature_readings.append(temperature)
-        average_temperature = 0
-        if len(Database.temperature_readings) > cls.READINGS_TO_AVERAGE:
+        average_temperature = 0 
+        if len(Database.temperature_readings) > cls.READINGS_TO_AVERAGE-1:
             # Get last constant readings
-            average_temperature = (sum(Database.temperature_readings
-                                      [-cls.READINGS_TO_AVERAGE:]) /
+            average_temperature = ((sum(Database.temperature_readings
+                                      [-cls.READINGS_TO_AVERAGE+1:])+temperature) /
                                       cls.READINGS_TO_AVERAGE)
         else:
-            average_temperature = (sum(Database.temperature_readings) /
-                                   len(Database.temperature_readings))
+            average_temperature = ((sum(Database.temperature_readings)+temperature) /
+                                   (len(Database.temperature_readings)+1))
         return average_temperature
 
 class Extruder:
@@ -130,9 +129,9 @@ class Extruder:
 
             delta_time = current_time - self.previous_time
             self.previous_time = current_time
-            temperature = Thermistor.get_temperature(self.channel_0.voltage)
+            temperature, avg_temperature = Thermistor.get_temperature(self.channel_0.voltage)
             
-            error = target_temperature - temperature
+            error = target_temperature - avg_temperature
             self.integral += error * delta_time
             derivative = (error - self.previous_error) / delta_time
             self.previous_error = error
@@ -144,10 +143,11 @@ class Extruder:
             
             self.heater_pwm.ChangeDutyCycle(output)
             
-            self.gui.temperature_plot.update_plot(current_time, temperature,target_temperature)
+            self.gui.temperature_plot.update_plot(current_time, avg_temperature, target_temperature)
             
             Database.temperature_timestamps.append(current_time)
             Database.temperature_delta_time.append(delta_time)
+            Database.temperature_readings.append(temperature)
             Database.temperature_setpoint.append(target_temperature)
             Database.temperature_error.append(error)
             Database.temperature_pid_output.append(output)
@@ -169,7 +169,7 @@ class Extruder:
             pwm_value = self.gui.heater_open_loop_pwm.value()
             delta_time = current_time - self.previous_time
             self.previous_time = current_time
-            temperature = Thermistor.get_temperature(self.channel_0.voltage)
+            temperature, avg_temperature = Thermistor.get_temperature(self.channel_0.voltage)
 
             # Configurar PWM para el heater
             if not hasattr(self, 'heater_pwm'):
@@ -186,6 +186,7 @@ class Extruder:
             Database.temperature_timestamps.append(current_time)
             Database.temperature_delta_time.append(delta_time)
             Database.temperature_setpoint.append(0)  # No hay setpoint en lazo abierto
+            Database.temperature_readings.append(temperature)
             Database.temperature_error.append(0)     # No hay error en lazo abierto
             Database.temperature_pid_output.append(pwm_value)
             Database.temperature_kp.append(0)
