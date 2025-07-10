@@ -77,7 +77,7 @@ class Extruder:
         self.diameter_setpoint = Extruder.DEFAULT_DIAMETER
         
         # Control parameters
-        self.previous_time = 0.0
+        self.previous_time = time.time()
         self.previous_error = 0.0
         self.integral = 0.0
 

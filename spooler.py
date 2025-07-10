@@ -37,7 +37,7 @@ class Spooler:
         self.initialize_encoder()
         
         # Control parameters
-        self.previous_time = 0.0
+        self.previous_time = time.time()
         self.integral_diameter = 0.0
         self.previous_error_diameter = 0.0
         self.previous_position = 0
