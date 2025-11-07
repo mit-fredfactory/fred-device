@@ -21,8 +21,8 @@ def hardware_control(gui: UserInterface) -> None:
         spooler.start(1000, 0)
     except Exception as e:
         print(f"Error in hardware control: {e}")
-        gui.show_message("Error while starting the device",
-                         "Please restart the program.")
+        # Do NOT call gui.show_message here (from thread), just print/log the error
+        return
 
     init_time = time.time()
     while True:
@@ -32,45 +32,34 @@ def hardware_control(gui: UserInterface) -> None:
             if gui.start_motor_calibration:
                 spooler.calibrate()
                 gui.start_motor_calibration = False
-                
-            # DC Motor Control Logic
-            if gui.dc_motor_open_loop_enabled and not gui.dc_motor_close_loop_enabled:
-                spooler.dc_motor_open_loop_control(current_time)
-                
-            elif gui.dc_motor_close_loop_enabled and not gui.dc_motor_open_loop_enabled:
-                spooler.dc_motor_close_loop_control(current_time)
-            
-            # Heater Control Logic
-            if gui.heater_open_loop_enabled and not gui.device_started:  
-                extruder.temperature_open_loop_control(current_time)     
-                extruder.stepper_control_loop()
-            
-            # Camera Feedback PLOT OPEN LOOP
-            if gui.camera_feedback_enabled:
-                gui.fiber_camera.camera_feedback(current_time)
-                            
-            if gui.device_started:
+
+            # Open loop heater (if enabled)
+            if hasattr(gui, "heater_open_loop_enabled") and gui.heater_open_loop_enabled:
+                extruder.temperature_open_loop_control(current_time)
+            # Closed loop heater (default)
+            elif gui.device_started:
                 extruder.temperature_control_loop(current_time)
                 extruder.stepper_control_loop()
-                
-            fan.control_loop()
+                if hasattr(gui, "spooling_control_state") and gui.spooling_control_state:
+                    spooler.motor_control_loop(current_time)
+                fan.control_loop()
             time.sleep(0.05)
         except Exception as e:
             print(f"Error in hardware control loop: {e}")
-            gui.show_message("Error in hardware control loop",
-                             "Please restart the program.")
-            fan.stop()
-            spooler.stop()
-            extruder.stop()
+            # Do NOT call gui.show_message here (from thread), just print/log the error
+            try:
+                fan.stop()
+                spooler.stop()
+                extruder.stop()
+            except Exception:
+                pass
+            break
 
 if __name__ == "__main__":
     print("Starting FrED Device...")
     ui = UserInterface()
     time.sleep(2)
-    hardware_thread = threading.Thread(target=hardware_control, args=(ui,))
+    hardware_thread = threading.Thread(target=hardware_control, args=(ui,), daemon=True)
     hardware_thread.start()
-    threading.Lock()
     ui.start_gui()
-    hardware_thread.join()
     print("FrED Device Closed.")
-
