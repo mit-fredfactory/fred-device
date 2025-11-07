@@ -1,4 +1,9 @@
+# Shell Script to Install FrED Device Package Requirements
+
 #!/bin/bash
+
+# stop script on error
+set -e
 
 # Ensure pip is up to date
 python3 -m pip install --upgrade pip
