@@ -40,5 +40,4 @@ printf "\nAll packages are checked and installed if necessary.\n"
 
 # Start FrED Application
 printf "\nRunning FrED application...\n"
-python3 fred-device/main.py 
-# --endpoint a2jz91nv8kralk-ats.iot.us-east-1.amzonaws.com --ca_file root-CA.crt --cert thing_Fred1.cert.pem --key thing_Fred1.private.key
+python3 main.py 
