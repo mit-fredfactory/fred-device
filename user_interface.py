@@ -328,7 +328,7 @@ class UserInterface():
         motor_kp.setSingleStep(0.01)
         motor_kp.setMinimum(0)
         motor_kp.setMaximum(10)
-        motor_kp.setValue(0.75)
+        motor_kp.setValue(0.50)
 
         motor_ki_label = QLabel("Motor Ki")
         motor_ki_label.setStyleSheet(font_style % 14)
