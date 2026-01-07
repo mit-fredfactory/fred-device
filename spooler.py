@@ -13,7 +13,7 @@ class Spooler:
     SLAVE_SELECT_ENC = 1
     PWM_PIN = 5
     
-    PULSES_PER_REVOLUTION = 4704  # Updated for the new encoder
+    PULSES_PER_REVOLUTION = 4704  # Updated for the new encoder 4*12*98
     READINGS_TO_AVERAGE = 10
     SAMPLE_TIME = 0.1
     DIAMETER_PREFORM = 7
