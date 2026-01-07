@@ -41,10 +41,10 @@ class StepperMotor:
         self.M1_pin = M1_pin
         self.M2_pin = M2_pin
         self.state = False  # PWM state: False = stopped, True = running
+        self.current_rpm = 0.0
 
         GPIO.setup(self.step_pin, GPIO.OUT)
-        self.pwm = GPIO.PWM(self.step_pin, 1000)  # Initial frequency
-
+        self.pwm = GPIO.PWM(self.step_pin, 0)  # Initial frequency
 
         GPIO.setup(self.direction_pin, GPIO.OUT)
         self.set_direction(False)
@@ -62,20 +62,20 @@ class StepperMotor:
 
     def set_speed(self, rpm: float) -> None:
         """Set motor speed in RPM"""
-        if rpm > 0.0:
-            frequency = (rpm * self.STEPS_PER_REVOLUTION) / 60 # Steps per second
-            self.pwm.ChangeFrequency(frequency)
-            if not self.state:
-                self.pwm.start(50)
-                self.state = True
+        if rpm != self.current_rpm:
+            if rpm > 0.0:
+                frequency = (rpm * self.STEPS_PER_REVOLUTION) / 60 # Steps per second
+                self.pwm.ChangeFrequency(frequency)
+                if not self.state:
+                    self.pwm.start(50)
+                    self.state = True
+                else:
+                    self.pwm.ChangeDutyCycle(50)  # 50% duty cycle for full step
             else:
-                self.pwm.ChangeDutyCycle(50)  # 50% duty cycle for full step
-        else:
-            if self.state:
                 self.pwm.stop()
                 self.state = False
-            # else:
-            # self.pwm.ChangeDutyCycle(0)  # Stop the motor
+        self.current_rpm = rpm
+        
 
 
 
