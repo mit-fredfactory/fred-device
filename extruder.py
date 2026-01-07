@@ -17,8 +17,8 @@ class Heater:
     def __init__(self, heater_pin: int) -> None:
         self.heater_pin = heater_pin
 
-        GPIO.setup(self.HEATER_PIN, GPIO.OUT)
-        self.pwm = GPIO.PWM(self.HEATER_PIN, 1)  # 1kHz frequency
+        GPIO.setup(self.heater_pin, GPIO.OUT)
+        self.pwm = GPIO.PWM(self.heater_pin, 1)  # 1kHz frequency
         self.pwm.start(0)
 
     def set_duty_cycle(self, duty_cycle: float) -> None:
