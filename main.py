@@ -67,10 +67,18 @@ if __name__ == "__main__":
     print("Starting FrED Device...")
     ui = UserInterface()
     time.sleep(2)
+
     hardware_thread = threading.Thread(target=hardware_control, args=(ui,))
     hardware_thread.start()
     threading.Lock()
-    ui.start_gui()
+
+    # Start GUI (blocking)
+    try:
+        ui.start_gui()
+    except KeyboardInterrupt:
+        print("GUI stopped.")
+
+    # Cleanup
     hardware_thread.join()
     print("FrED Device Closed.")
 
