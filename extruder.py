@@ -112,7 +112,39 @@ class Thermistor:
         temperature = (1 / ((ln / self.BETA_COEFFICIENT) + (1 / self.REFERENCE_TEMPERATURE))) - 273.15
 
         return temperature
+    
+    def get_temperature_smooth(self) -> float:
+        """Get the average temperature from the voltage using Steinhart-Hart 
+        equation"""
+        voltage = 0
+        for i in range(Thermistor.READINGS_TO_AVERAGE):
+            voltage += self.get_voltage()
+        voltage /= Thermistor.READINGS_TO_AVERAGE
+        if voltage < 0.0001 or voltage >= self.VOLTAGE_SUPPLY:  # Prevenir división por cero
+            print("Thermistor voltage out of range")
+            return 0
+        
+        resistance = ((self.VOLTAGE_SUPPLY - voltage) * self.RESISTOR )/ voltage
+        ln = math.log(resistance / self.RESISTANCE_AT_REFERENCE)
+        temperature = (1 / ((ln / self.BETA_COEFFICIENT) + (1 / self.REFERENCE_TEMPERATURE))) - 273.15
 
+        return temperature
+
+    # def get_movavg_temperature(self) -> float:
+    #     """Get the moving average temperature from the thermistor readings"""
+    #     temperature = self.get_temperature()
+    #     Database.temperature_readings.append(temperature)
+    #     average_temperature = 0
+    #     if len(Database.temperature_readings) > self.READINGS_TO_AVERAGE:
+    #         # Get last constant readings
+    #         average_temperature = (sum(Database.temperature_readings
+    #                                   [-self.READINGS_TO_AVERAGE:]) /
+    #                                   self.READINGS_TO_AVERAGE)
+    #     else:
+    #         average_temperature = (sum(Database.temperature_readings) /
+    #                                len(Database.temperature_readings))
+    #     return average_temperature
+    
     # @classmethod
     # def get_temperature(cls, voltage: float) -> float:
     #     """Get the average temperature from the voltage using Steinhart-Hart 
@@ -188,7 +220,7 @@ class Extruder:
             dt = current_time - self.previous_time
             self.previous_time = current_time
 
-            temperature = self.thermistor.get_temperature()
+            temperature = self.thermistor.get_temperature_smooth()
             
             pid_output = self.pid.update(target_temperature, temperature, dt, kp, ki, kd)
             
