@@ -5,12 +5,8 @@ class Database():
     """Class to store the raw data and generate the CSV file"""
     time_readings = []
     
-    camera_timestamps = []  # Timestamps for diameter measurements
+    # extruder_timestamps = []
     temperature_timestamps = []  # For future temperature measurements
-    spooler_timestamps = []  # For future spooler measurements
-    cooling_timestamps = []
-    extruder_timestamps = []
-
     temperature_delta_time = []
     temperature_readings = []
     temperature_setpoint = []
@@ -21,10 +17,12 @@ class Database():
     temperature_kd = []
     extruder_rpm = []
     
+    camera_timestamps = []  # Timestamps for diameter measurements
     diameter_delta_time = []
     diameter_readings = []
     diameter_setpoint = []
 
+    spooler_timestamps = []  # For future spooler measurements
     spooler_delta_time = []
     spooler_setpoint = []
     spooler_kp = []
@@ -32,6 +30,7 @@ class Database():
     spooler_kd = []
     spooler_rpm = []
 
+    cooling_timestamps = []
     fan_duty_cycle = []
 
     @classmethod
