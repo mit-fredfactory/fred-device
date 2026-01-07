@@ -10,7 +10,7 @@ from adafruit_mcp3xxx.analog_in import AnalogIn
 
 from database import Database
 from user_interface import UserInterface
-from controller import PID
+from controller import PID, LowPassFilter
 
 class Heater:
     """Class to control the heater via PWM"""
@@ -129,26 +129,6 @@ class Thermistor:
         
         return average_temperature
     
-    # @classmethod
-    # def get_temperature(cls, voltage: float) -> float:
-    #     """Get the average temperature from the voltage using Steinhart-Hart 
-    #     equation"""
-    #     if voltage < 0.0001 or voltage >= cls.VOLTAGE_SUPPLY:  # Prevenir división por cero
-    #         return 0
-    #     resistance = ((cls.VOLTAGE_SUPPLY - voltage) * cls.RESISTOR )/ voltage
-    #     ln = math.log(resistance / cls.RESISTANCE_AT_REFERENCE)
-    #     temperature = (1 / ((ln / cls.BETA_COEFFICIENT) + (1 / cls.REFERENCE_TEMPERATURE))) - 273.15
-    #     Database.temperature_readings.append(temperature)
-    #     average_temperature = 0
-    #     if len(Database.temperature_readings) > cls.READINGS_TO_AVERAGE:
-    #         # Get last constant readings
-    #         average_temperature = (sum(Database.temperature_readings
-    #                                   [-cls.READINGS_TO_AVERAGE:]) /
-    #                                   cls.READINGS_TO_AVERAGE)
-    #     else:
-    #         average_temperature = (sum(Database.temperature_readings) /
-    #                                len(Database.temperature_readings))
-    #     return average_temperature
 
 class Extruder:
     """Controller of the extrusion process: the heater and stepper motor"""
@@ -175,7 +155,7 @@ class Extruder:
         # Control parameters
         self.previous_time = 0.0
         self.pid = PID(kp=0.0, ki=0.0, kd=0.0, dt=Extruder.SAMPLE_TIME, output_limits=(Extruder.MIN_OUTPUT, Extruder.MAX_OUTPUT), tau=0.0)
-
+        self.lpf = LowPassFilter(tau=Extruder.SAMPLE_TIME*5, dt=Extruder.SAMPLE_TIME)
 
     def stepper_control_loop(self, current_time: float) -> None:
         """Control stepper motor speed"""
@@ -205,19 +185,19 @@ class Extruder:
             self.previous_time = current_time
 
             temperature = self.thermistor.get_temperature()
-            temperature_movavg = self.thermistor.get_movavg_temperature(temperature)
+            temperature_filtered = self.thermistor.lpf.update_dynamic(temperature, dt)
             
             # pid_output = self.pid.update(target_temperature, temperature, dt, kp, ki, kd)
-            pid_output = self.pid.update(target_temperature, temperature_movavg, dt, kp, ki, kd)
+            pid_output = self.pid.update(target_temperature, temperature_filtered, dt, kp, ki, kd)
             
             self.heater.set_duty_cycle(pid_output)
             
             # self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
-            self.gui.temperature_plot.update_plot(current_time, temperature_movavg, target_temperature)
+            self.gui.temperature_plot.update_plot(current_time, temperature_filtered, target_temperature)
             
             Database.temperature_timestamps.append(current_time)
             Database.temperature_readings.append(temperature)
-            Database.temperature_movavg.append(temperature_movavg)
+            Database.temperature_movavg.append(temperature_filtered)
             Database.temperature_delta_time.append(dt)
             Database.temperature_setpoint.append(target_temperature)
             Database.temperature_pid_output.append(pid_output)
