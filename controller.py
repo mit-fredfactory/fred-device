@@ -62,3 +62,18 @@ class PID:
         self.prev_measurement = measurement
 
         return u
+    
+class LowPassFilter:
+    def __init__(self, tau, dt, initial=0.0):
+        self.tau = tau
+        self.alpha = dt / (tau + dt)
+        self.y = initial
+
+    def update(self, x):
+        self.y += self.alpha * (x - self.y)
+        return self.y
+    
+    def update_dynamic(self, x, dt):
+        self.alpha = dt / (self.tau + dt)
+        self.y += self.alpha * (x - self.y)
+        return self.y
