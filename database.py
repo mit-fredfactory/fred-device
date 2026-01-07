@@ -5,16 +5,18 @@ class Database():
     """Class to store the raw data and generate the CSV file"""
     time_readings = []
     
-    # extruder_timestamps = []
     temperature_timestamps = []  # For future temperature measurements
     temperature_delta_time = []
     temperature_readings = []
+    temperature_movavg = []
     temperature_setpoint = []
     temperature_error = []
     temperature_pid_output = []
     temperature_kp = []
     temperature_ki = []
     temperature_kd = []
+
+    extruder_timestamps = []
     extruder_rpm = []
     
     camera_timestamps = []  # Timestamps for diameter measurements

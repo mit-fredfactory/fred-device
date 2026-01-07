@@ -51,9 +51,10 @@ def hardware_control(gui: UserInterface) -> None:
                             
             if gui.device_started:
                 extruder.temperature_control_loop(current_time)
-                extruder.stepper_control_loop()
+                extruder.stepper_control_loop(current_time)
                 
             fan.control_loop()
+            
             time.sleep(0.05)
         except Exception as e:
             print(f"Error in hardware control loop: {e}")
