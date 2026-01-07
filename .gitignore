@@ -163,3 +163,4 @@ cython_debug/
 
 # Raw data fiiles
 *.csv
+.github/copilot-instructions.md
