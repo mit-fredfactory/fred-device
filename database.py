@@ -8,7 +8,7 @@ class Database():
     temperature_timestamps = []  # For future temperature measurements
     temperature_delta_time = []
     temperature_readings = []
-    temperature_movavg = []
+    temperature_filtered = []
     temperature_setpoint = []
     # temperature_error = []
     temperature_pid_output = []

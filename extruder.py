@@ -88,10 +88,10 @@ class Thermistor:
     RESISTOR = 100000 # Ω
     READINGS_TO_AVERAGE = 10
 
-    def __init__(self):
+    def __init__(self, cs_pin: int = board.D8) -> None:
         """Initialize the SPI for thermistor temperature readings"""
         spi = busio.SPI(clock=board.SCK, MISO=board.MISO, MOSI=board.MOSI) #intialize SPI bus
-        cs = digitalio.DigitalInOut(board.D8) # Create the cs (chip select)
+        cs = digitalio.DigitalInOut(cs_pin) # Create the cs (chip select)
         mcp = MCP.MCP3008(spi, cs) # Create the mcp object
         self.channel_0 = AnalogIn(mcp, MCP.P0) # Create analog inputs connected to the input pins on the MCP3008
 
@@ -133,11 +133,15 @@ class Thermistor:
 class Extruder:
     """Controller of the extrusion process: the heater and stepper motor"""
     HEATER_PIN = 6
+
     DIRECTION_PIN = 16
     STEP_PIN = 20
+    M0_PIN = 17
+    M1_PIN = 27
+    M2_PIN = 22
 
     STEPS_PER_REVOLUTION = 200
-    DEFAULT_RPM = 0.6 # TODO: Delay is not being used, will be removed temporarily
+    
     SAMPLE_TIME = 0.1
     MAX_OUTPUT = 100
     MIN_OUTPUT = 0
@@ -150,7 +154,7 @@ class Extruder:
         
         self.heater = Heater(Extruder.HEATER_PIN)
         self.thermistor = Thermistor()
-        self.stepper_motor = StepperMotor(Extruder.STEP_PIN, Extruder.DIRECTION_PIN, M0_pin=21, M1_pin=22, M2_pin=23)
+        self.stepper_motor = StepperMotor(Extruder.STEP_PIN, Extruder.DIRECTION_PIN, Extruder.M0_PIN, Extruder.M1_PIN, Extruder.M2_PIN)
 
         # Control parameters
         self.previous_time = 0.0
@@ -197,7 +201,7 @@ class Extruder:
             
             Database.temperature_timestamps.append(current_time)
             Database.temperature_readings.append(temperature)
-            Database.temperature_movavg.append(temperature_filtered)
+            Database.temperature_filtered.append(temperature_filtered)
             Database.temperature_delta_time.append(dt)
             Database.temperature_setpoint.append(target_temperature)
             Database.temperature_pid_output.append(pid_output)
