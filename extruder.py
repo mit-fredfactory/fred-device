@@ -112,38 +112,22 @@ class Thermistor:
         temperature = (1 / ((ln / self.BETA_COEFFICIENT) + (1 / self.REFERENCE_TEMPERATURE))) - 273.15
 
         return temperature
-    
-    def get_temperature_smooth(self) -> float:
-        """Get the average temperature from the voltage using Steinhart-Hart 
-        equation"""
-        voltage = 0
-        for i in range(Thermistor.READINGS_TO_AVERAGE):
-            voltage += self.get_voltage()
-        voltage /= Thermistor.READINGS_TO_AVERAGE
-        if voltage < 0.0001 or voltage >= self.VOLTAGE_SUPPLY:  # Prevenir división por cero
-            print("Thermistor voltage out of range")
-            return 0
+
+
+    def get_movavg_temperature(self, temperature) -> float:
+        """Get the moving average temperature from the thermistor readings"""
+
+        average_temperature = 0
+        if len(Database.temperature_readings) > Thermistor.READINGS_TO_AVERAGE-1:
+            # Get last constant readings
+            average_temperature = ((sum(Database.temperature_readings
+                                      [-Thermistor.READINGS_TO_AVERAGE+1:])+temperature) /
+                                      Thermistor.READINGS_TO_AVERAGE)
+        else:
+            average_temperature = ((sum(Database.temperature_readings)+temperature) /
+                                   (len(Database.temperature_readings)+1))
         
-        resistance = ((self.VOLTAGE_SUPPLY - voltage) * self.RESISTOR )/ voltage
-        ln = math.log(resistance / self.RESISTANCE_AT_REFERENCE)
-        temperature = (1 / ((ln / self.BETA_COEFFICIENT) + (1 / self.REFERENCE_TEMPERATURE))) - 273.15
-
-        return temperature
-
-    # def get_movavg_temperature(self) -> float:
-    #     """Get the moving average temperature from the thermistor readings"""
-    #     temperature = self.get_temperature()
-    #     Database.temperature_readings.append(temperature)
-    #     average_temperature = 0
-    #     if len(Database.temperature_readings) > self.READINGS_TO_AVERAGE:
-    #         # Get last constant readings
-    #         average_temperature = (sum(Database.temperature_readings
-    #                                   [-self.READINGS_TO_AVERAGE:]) /
-    #                                   self.READINGS_TO_AVERAGE)
-    #     else:
-    #         average_temperature = (sum(Database.temperature_readings) /
-    #                                len(Database.temperature_readings))
-    #     return average_temperature
+        return average_temperature
     
     # @classmethod
     # def get_temperature(cls, voltage: float) -> float:
@@ -220,17 +204,20 @@ class Extruder:
             dt = current_time - self.previous_time
             self.previous_time = current_time
 
-            temperature = self.thermistor.get_temperature_smooth()
+            temperature = self.thermistor.get_temperature()
+            temperature_movavg = self.thermistor.get_movavg_temperature(temperature)
             
-            pid_output = self.pid.update(target_temperature, temperature, dt, kp, ki, kd)
+            # pid_output = self.pid.update(target_temperature, temperature, dt, kp, ki, kd)
+            pid_output = self.pid.update(target_temperature, temperature_movavg, dt, kp, ki, kd)
             
             self.heater.set_duty_cycle(pid_output)
             
-            self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
+            # self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
+            self.gui.temperature_plot.update_plot(current_time, temperature_movavg, target_temperature)
             
             Database.temperature_timestamps.append(current_time)
             Database.temperature_readings.append(temperature)
-            # Database.temperature_movavg.append(temperature)
+            Database.temperature_movavg.append(temperature_movavg)
             Database.temperature_delta_time.append(dt)
             Database.temperature_setpoint.append(target_temperature)
             Database.temperature_pid_output.append(pid_output)
