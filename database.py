@@ -8,6 +8,8 @@ class Database():
     camera_timestamps = []  # Timestamps for diameter measurements
     temperature_timestamps = []  # For future temperature measurements
     spooler_timestamps = []  # For future spooler measurements
+    cooling_timestamps = []
+    extruder_timestamps = []
 
     temperature_delta_time = []
     temperature_readings = []
