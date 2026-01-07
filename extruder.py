@@ -92,7 +92,7 @@ class Thermistor:
         """Get the average temperature from the voltage using Steinhart-Hart 
         equation"""
         voltage = self.get_voltage()
-        if voltage < 0.0001 or voltage >= cls.VOLTAGE_SUPPLY:  # Prevenir división por cero
+        if voltage < 0.0001 or voltage >= self.VOLTAGE_SUPPLY:  # Prevenir división por cero
             return 0
         
         resistance = ((self.VOLTAGE_SUPPLY - voltage) * self.RESISTOR )/ voltage
