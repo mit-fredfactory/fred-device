@@ -61,10 +61,14 @@ class StepperMotor:
 
     def set_speed(self, rpm: float) -> None:
         """Set motor speed in RPM"""
-        steps_per_second = (rpm * self.STEPS_PER_REVOLUTION) / 60
-        frequency = steps_per_second   # Each cycle is two steps
-        self.pwm.ChangeFrequency(frequency)
-        self.pwm.ChangeDutyCycle(50)  # 50% duty cycle for full step
+        if rpm > 0.0:
+            frequency = (rpm * self.STEPS_PER_REVOLUTION) / 60 # Steps per second
+            self.pwm.ChangeFrequency(frequency)
+            self.pwm.ChangeDutyCycle(50)  # 50% duty cycle for full step
+        else:
+            self.pwm.ChangeDutyCycle(0)  # Stop the motor
+
+
 
 
 class Thermistor:
@@ -154,9 +158,9 @@ class Extruder:
         """Control stepper motor speed"""
         try:
             setpoint_rpm = self.gui.extrusion_motor_speed.value()
-            self.pwm.ChangeDutyCycle(0)
-            if setpoint_rpm > 0.0:
-                self.stepper_motor.set_speed(setpoint_rpm)
+
+            self.stepper_motor.set_speed(setpoint_rpm)
+
             Database.extruder_timestamps.append(current_time)
             Database.extruder_rpm.append(setpoint_rpm)
         except Exception as e:
