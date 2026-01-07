@@ -10,7 +10,7 @@ class Database():
     temperature_readings = []
     temperature_movavg = []
     temperature_setpoint = []
-    temperature_error = []
+    # temperature_error = []
     temperature_pid_output = []
     temperature_kp = []
     temperature_ki = []

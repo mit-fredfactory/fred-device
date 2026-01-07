@@ -10,6 +10,7 @@ from adafruit_mcp3xxx.analog_in import AnalogIn
 
 from database import Database
 from user_interface import UserInterface
+from controller import PID
 
 class Heater:
     """Class to control the heater via PWM"""
@@ -76,8 +77,6 @@ class StepperMotor:
                 self.state = False
         self.current_rpm = rpm
         
-
-
 
 
 class Thermistor:
@@ -159,8 +158,7 @@ class Extruder:
 
         # Control parameters
         self.previous_time = 0.0
-        self.previous_error = 0.0
-        self.integral = 0.0
+        self.pid = PID(kp=0.0, ki=0.0, kd=0.0, dt=Extruder.SAMPLE_TIME, output_limits=(Extruder.MIN_OUTPUT, Extruder.MAX_OUTPUT), tau=0.0)
 
 
     def stepper_control_loop(self, current_time: float) -> None:
@@ -172,6 +170,7 @@ class Extruder:
 
             Database.extruder_timestamps.append(current_time)
             Database.extruder_rpm.append(setpoint_rpm)
+
         except Exception as e:
             print(f"Error in stepper control loop: {e}")
             self.gui.show_message("Error", "Stepper control loop error")
@@ -186,32 +185,23 @@ class Extruder:
             ki = self.gui.temperature_ki.value()
             kd = self.gui.temperature_kd.value()
 
-            delta_time = current_time - self.previous_time
+            dt = current_time - self.previous_time
             self.previous_time = current_time
 
             temperature = self.thermistor.get_temperature()
             
-            error = target_temperature - temperature
-            self.integral += error * delta_time 
-            derivative = (error - self.previous_error) / delta_time
-            self.previous_error = error
-            output = kp * error + ki * self.integral + kd * derivative
-            if output > Extruder.MAX_OUTPUT:
-                output = Extruder.MAX_OUTPUT
-            elif output < Extruder.MIN_OUTPUT:
-                output = Extruder.MIN_OUTPUT
+            pid_output = self.pid.update(target_temperature, temperature, dt, kp, ki, kd)
             
-            self.heater.set_duty_cycle(output)
+            self.heater.set_duty_cycle(pid_output)
             
             self.gui.temperature_plot.update_plot(current_time, temperature, target_temperature)
             
             Database.temperature_timestamps.append(current_time)
             Database.temperature_readings.append(temperature)
             # Database.temperature_movavg.append(temperature)
-            Database.temperature_delta_time.append(delta_time)
+            Database.temperature_delta_time.append(dt)
             Database.temperature_setpoint.append(target_temperature)
-            Database.temperature_error.append(error)
-            Database.temperature_pid_output.append(output)
+            Database.temperature_pid_output.append(pid_output)
             Database.temperature_kp.append(kp)
             Database.temperature_ki.append(ki)
             Database.temperature_kd.append(kd)
