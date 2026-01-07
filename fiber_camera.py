@@ -50,10 +50,11 @@ class FiberCamera(QWidget):
         fiber_diameter = self.get_fiber_diameter(detected_lines)
         frame = self.plot_lines(frame, detected_lines)
 
-        Database.camera_timestamps.append(current_time)
-        Database.diameter_readings.append(fiber_diameter)
-        Database.diameter_setpoint.append(self.target_diameter.value())
-        Database.diameter_delta_time.append(current_time - self.previous_time)
+        # Database.camera_timestamps.append(current_time)
+        # Database.diameter_readings.append(fiber_diameter)
+        # Database.diameter_setpoint.append(self.target_diameter.value())
+        # Database.diameter_delta_time.append(current_time - self.previous_time)
+        
         self.previous_time = current_time
 
         # Display the frame with lines
