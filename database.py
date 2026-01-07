@@ -10,14 +10,13 @@ class Database():
     temperature_readings = []
     temperature_filtered = []
     temperature_setpoint = []
-    # temperature_error = []
-    temperature_pid_output = []
+    temperature_dutycycle = []
     temperature_kp = []
     temperature_ki = []
     temperature_kd = []
 
-    extruder_timestamps = []
-    extruder_rpm = []
+    extruder_motor_timestamps = []
+    extruder_motor_rpm = []
     
     camera_timestamps = []  # Timestamps for diameter measurements
     diameter_delta_time = []
