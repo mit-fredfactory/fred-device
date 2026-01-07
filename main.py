@@ -43,7 +43,7 @@ def hardware_control(gui: UserInterface) -> None:
             # Heater Control Logic
             if gui.heater_open_loop_enabled and not gui.device_started:  
                 extruder.temperature_open_loop_control(current_time)     
-                extruder.stepper_control_loop()
+                extruder.stepper_control_loop(current_time)
             
             # Camera Feedback PLOT OPEN LOOP
             if gui.camera_feedback_enabled:
@@ -54,7 +54,7 @@ def hardware_control(gui: UserInterface) -> None:
                 extruder.stepper_control_loop(current_time)
                 
             fan.control_loop()
-            
+
             time.sleep(0.05)
         except Exception as e:
             print(f"Error in hardware control loop: {e}")
