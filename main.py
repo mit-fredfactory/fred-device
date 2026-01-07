@@ -17,7 +17,8 @@ def hardware_control(gui: UserInterface) -> None:
         fan = Fan(gui)
         spooler = Spooler(gui)
         extruder = Extruder(gui)
-        fan.start(1000, 45)
+        
+        fan.start(50) # Start fan at 50% duty cycle
         spooler.start(1000, 0)
     except Exception as e:
         print(f"Error in hardware control: {e}")
@@ -29,31 +30,32 @@ def hardware_control(gui: UserInterface) -> None:
         try:
             current_time = time.time() - init_time
             Database.time_readings.append(current_time)
+
             if gui.start_motor_calibration:
                 spooler.calibrate()
                 gui.start_motor_calibration = False
                 
             # DC Motor Control Logic
             if gui.dc_motor_open_loop_enabled and not gui.dc_motor_close_loop_enabled:
-                spooler.dc_motor_open_loop_control(current_time)
-                
+                spooler.dc_motor_open_loop_control(current_time)                
             elif gui.dc_motor_close_loop_enabled and not gui.dc_motor_open_loop_enabled:
                 spooler.dc_motor_close_loop_control(current_time)
             
             # Heater Control Logic
             if gui.heater_open_loop_enabled and not gui.device_started:  
                 extruder.temperature_open_loop_control(current_time)     
-                extruder.stepper_control_loop(current_time)
-            
-            # Camera Feedback PLOT OPEN LOOP
-            if gui.camera_feedback_enabled:
-                gui.fiber_camera.camera_feedback(current_time)
-                            
+                extruder.stepper_control_loop(current_time)  
+         
             if gui.device_started:
                 extruder.temperature_control_loop(current_time)
                 extruder.stepper_control_loop(current_time)
-                
-            fan.control_loop()
+
+            # Camera Feedback PLOT OPEN LOOP
+            if gui.camera_feedback_enabled:
+                gui.fiber_camera.camera_feedback(current_time)
+                   
+            # Fan controls is always on     
+            fan.control_loop(current_time)
 
             time.sleep(0.05)
         except Exception as e:

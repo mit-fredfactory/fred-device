@@ -19,7 +19,7 @@ class Heater:
         self.heater_pin = heater_pin
 
         GPIO.setup(self.heater_pin, GPIO.OUT)
-        self.pwm = GPIO.PWM(self.heater_pin, 1)  # 1kHz frequency
+        self.pwm = GPIO.PWM(self.heater_pin, 1)  # 1Hz frequency
         self.pwm.start(0)
 
     def set_duty_cycle(self, duty_cycle: float) -> None:
@@ -29,6 +29,11 @@ class Heater:
         elif duty_cycle > 100:
             duty_cycle = 100
         self.pwm.ChangeDutyCycle(duty_cycle)
+    
+    def stop(self) -> None:
+        """Stop the Heater PWM"""
+        if self.pwm:
+            self.pwm.stop()
 
 
 class StepperMotor:
@@ -249,4 +254,9 @@ class Extruder:
         except Exception as e:
             print(f"Error in temperature open loop control: {e}")
             self.gui.show_message("Error", "Error in temperature open loop control")
+    
+    def stop(self) -> None:
+        """Stop the extruder components"""
+        self.heater.stop()
+        self.stepper_motor.set_speed(0)
                  

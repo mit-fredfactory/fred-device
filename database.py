@@ -31,7 +31,8 @@ class Database():
     spooler_kd = []
     spooler_rpm = []
 
-    cooling_timestamps = []
+    fan_timestamps = []
+    fan_delta_time = []
     fan_duty_cycle = []
 
     @classmethod
