@@ -44,7 +44,7 @@ class StepperMotor:
         self.current_rpm = 0.0
 
         GPIO.setup(self.step_pin, GPIO.OUT)
-        self.pwm = GPIO.PWM(self.step_pin, 0)  # Initial frequency
+        self.pwm = GPIO.PWM(self.step_pin, 1)  # Initial frequency
 
         GPIO.setup(self.direction_pin, GPIO.OUT)
         self.set_direction(False)
