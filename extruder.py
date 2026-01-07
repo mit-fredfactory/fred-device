@@ -185,7 +185,7 @@ class Extruder:
             self.previous_time = current_time
 
             temperature = self.thermistor.get_temperature()
-            temperature_filtered = self.thermistor.lpf.update_dynamic(temperature, dt)
+            temperature_filtered = self.lpf.update_dynamic(temperature, dt)
             
             # pid_output = self.pid.update(target_temperature, temperature, dt, kp, ki, kd)
             pid_output = self.pid.update(target_temperature, temperature_filtered, dt, kp, ki, kd)
