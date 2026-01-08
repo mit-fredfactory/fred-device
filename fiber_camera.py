@@ -179,9 +179,9 @@ class FiberCamera(QWidget):
             self.gui.diameter_plot.update_plot(current_time, current_diameter, self.target_diameter.value())
 
             Database.camera_timestamps.append(current_time)
+            Database.diameter_delta_time.append(current_time - self.previous_time)
             Database.diameter_readings.append(current_diameter)
             Database.diameter_setpoint.append(self.target_diameter.value())
-            Database.diameter_delta_time.append(current_time - self.previous_time)
             self.previous_time = current_time
 
         except Exception as e:

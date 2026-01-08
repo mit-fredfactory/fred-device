@@ -167,8 +167,9 @@ class Spooler:
             # Store data
             Database.spooler_timestamps.append(current_time)
             Database.spooler_delta_time.append(delta_time)
+            Database.spooler_readings.append(current_rpm)
             Database.spooler_setpoint.append(setpoint_rpm)
-            Database.spooler_rpm.append(current_rpm)
+            Database.spooler_dutycycle.append(output_duty_cycle)
             Database.spooler_kp.append(motor_kp)
             Database.spooler_ki.append(motor_ki)
             Database.spooler_kd.append(motor_kd)
@@ -178,84 +179,7 @@ class Spooler:
             self.gui.show_message("Error", "Error in motor close loop control")
 
 
-    def motor_control_loop(self, current_time: float) -> None:
-        """Closed loop control of the DC motor for desired diameter"""
-        if current_time - self.previous_time <= Spooler.SAMPLE_TIME:
-            return
-        try:
-            if not self.motor_calibration:
-                self.gui.show_message("Motor calibration data not found",
-                                    "Please calibrate the motor.")
-                self.motor_calibration = True
-            
-            # Read current position and calculate RPM    new check
-            current_position = self.read_encoder()
-            delta_time = current_time - self.previous_time
-            delta_position = current_position - self.previous_position
-            current_rpm = (delta_position / Spooler.PULSES_PER_REVOLUTION) * (60 / delta_time)
-            
-            #update previous values
-            self.previous_position = current_position
-            self.previous_time = current_time
-            
-            target_diameter = self.gui.target_diameter.value()
-            current_diameter = self.get_average_diameter()
-
-            #diameter_ku = self.gui.diameter_gain.value()
-            #diameter_tu = self.gui.diameter_oscilation_period.value()
-            #diameter_kp = 0.6 * diameter_ku
-            #diameter_ti = diameter_tu / 2
-            #diameter_td = diameter_tu / 8
-            #diameter_ki = diameter_kp / diameter_ti
-            #diameter_kd = diameter_kp * diameter_td
-
-            #motor_ku = self.gui.motor_gain.value()
-            #motor_tu = self.gui.motor_oscilation_period.value()
-            #motor_kp = 0.6 * motor_ku
-            #motor_ti = motor_tu / 2
-            #motor_td = motor_tu / 8
-            #motor_ki = motor_kp / motor_ti
-            #motor_kd = motor_kp * motor_td
-            
-            #intragated control old check it
-
-            error = target_diameter - current_diameter
-            self.integral_diameter += error * delta_time
-            self.integral_diameter = max(min(self.integral_diameter, 0.5), -0.5)
-            derivative = (error - self.previous_error_diameter) / delta_time
-            self.previous_error_diameter = error
-            output = (diameter_kp * error + diameter_ki * self.integral_diameter
-                      + diameter_kd * derivative)
-            setpoint_rpm = self.diameter_to_rpm(target_diameter)
-            setpoint_rpm = max(min(setpoint_rpm, 0), 60)
-
-            # Control the motor old cheeck it
-             
-            error = setpoint_rpm - current_rpm
-            self.integral_motor += error * delta_time
-            self.integral_motor = max(min(self.integral_motor, 100), -100)
-            derivative = (error - self.previous_error_motor) / delta_time
-            self.previous_error_motor = error
-            output = (motor_kp * error + motor_ki * self.integral_motor +
-                        motor_kd * derivative)
-            output_duty_cycle = self.rpm_to_duty_cycle(output) 
-            output_duty_cycle = max(min(output_duty_cycle, 100), 0)
-            self.update_duty_cycle(output_duty_cycle)
-
-            # Update plots
-            self.gui.motor_plot.update_plot(current_time, current_rpm,
-                                            setpoint_rpm)
-            self.gui.diameter_plot.update_plot(current_time, current_diameter,target_diameter)
-
-
-            # Add data to the database
-            Database.spooler_timestamps.append(current_time)
-            Database.spooler_delta_time.append(delta_time)
-        except Exception as e:
-            print(f"Error in motor control loop: {e}")
-            self.gui.show_message("Error", "Error in motor control loop",
-                                  "Please restart the program.")
-
+    
     def calibrate(self) -> None:
         """Calibrate the DC Motor"""
         rpm_values = []
@@ -350,3 +274,81 @@ class Spooler:
             print(f"Error in DC motor open loop control: {e}")
             self.gui.show_message("Error", 
                                  "Error in DC motor open loop control")
+
+    # def motor_control_loop(self, current_time: float) -> None:
+    #     """Closed loop control of the DC motor for desired diameter"""
+    #     if current_time - self.previous_time <= Spooler.SAMPLE_TIME:
+    #         return
+    #     try:
+    #         if not self.motor_calibration:
+    #             self.gui.show_message("Motor calibration data not found",
+    #                                 "Please calibrate the motor.")
+    #             self.motor_calibration = True
+            
+    #         # Read current position and calculate RPM    new check
+    #         current_position = self.read_encoder()
+    #         delta_time = current_time - self.previous_time
+    #         delta_position = current_position - self.previous_position
+    #         current_rpm = (delta_position / Spooler.PULSES_PER_REVOLUTION) * (60 / delta_time)
+            
+    #         #update previous values
+    #         self.previous_position = current_position
+    #         self.previous_time = current_time
+            
+    #         target_diameter = self.gui.target_diameter.value()
+    #         current_diameter = self.get_average_diameter()
+
+    #         #diameter_ku = self.gui.diameter_gain.value()
+    #         #diameter_tu = self.gui.diameter_oscilation_period.value()
+    #         #diameter_kp = 0.6 * diameter_ku
+    #         #diameter_ti = diameter_tu / 2
+    #         #diameter_td = diameter_tu / 8
+    #         #diameter_ki = diameter_kp / diameter_ti
+    #         #diameter_kd = diameter_kp * diameter_td
+
+    #         #motor_ku = self.gui.motor_gain.value()
+    #         #motor_tu = self.gui.motor_oscilation_period.value()
+    #         #motor_kp = 0.6 * motor_ku
+    #         #motor_ti = motor_tu / 2
+    #         #motor_td = motor_tu / 8
+    #         #motor_ki = motor_kp / motor_ti
+    #         #motor_kd = motor_kp * motor_td
+            
+    #         #intragated control old check it
+
+    #         error = target_diameter - current_diameter
+    #         self.integral_diameter += error * delta_time
+    #         self.integral_diameter = max(min(self.integral_diameter, 0.5), -0.5)
+    #         derivative = (error - self.previous_error_diameter) / delta_time
+    #         self.previous_error_diameter = error
+    #         output = (diameter_kp * error + diameter_ki * self.integral_diameter
+    #                   + diameter_kd * derivative)
+    #         setpoint_rpm = self.diameter_to_rpm(target_diameter)
+    #         setpoint_rpm = max(min(setpoint_rpm, 0), 60)
+
+    #         # Control the motor old cheeck it
+             
+    #         error = setpoint_rpm - current_rpm
+    #         self.integral_motor += error * delta_time
+    #         self.integral_motor = max(min(self.integral_motor, 100), -100)
+    #         derivative = (error - self.previous_error_motor) / delta_time
+    #         self.previous_error_motor = error
+    #         output = (motor_kp * error + motor_ki * self.integral_motor +
+    #                     motor_kd * derivative)
+    #         output_duty_cycle = self.rpm_to_duty_cycle(output) 
+    #         output_duty_cycle = max(min(output_duty_cycle, 100), 0)
+    #         self.update_duty_cycle(output_duty_cycle)
+
+    #         # Update plots
+    #         self.gui.motor_plot.update_plot(current_time, current_rpm,
+    #                                         setpoint_rpm)
+    #         self.gui.diameter_plot.update_plot(current_time, current_diameter,target_diameter)
+
+
+    #         # Add data to the database
+    #         Database.spooler_timestamps.append(current_time)
+    #         Database.spooler_delta_time.append(delta_time)
+    #     except Exception as e:
+    #         print(f"Error in motor control loop: {e}")
+    #         self.gui.show_message("Error", "Error in motor control loop",
+    #                               "Please restart the program.")
