@@ -68,6 +68,7 @@ def hardware_control(gui: UserInterface) -> None:
 
 
 def cooling_control(gui: UserInterface) -> None:
+    print("Starting COOLING Thread...")
     """Thread to handle COOLING control"""
     time.sleep(1)
     GPIO.setmode(GPIO.BCM)
@@ -99,6 +100,7 @@ def cooling_control(gui: UserInterface) -> None:
 
 
 def spooler_control(gui: UserInterface) -> None:
+    print("Starting SPOOLER Thread...")
     """Thread to handle hardware control"""
     time.sleep(1)
     GPIO.setmode(GPIO.BCM)
@@ -137,6 +139,7 @@ def spooler_control(gui: UserInterface) -> None:
             spooler.stop()
 
 def extruder_control(gui: UserInterface) -> None:
+    print("Starting EXTRUDER Thread...")
     """Thread to handle hardware control"""
     time.sleep(1)
     GPIO.setmode(GPIO.BCM)
@@ -171,6 +174,7 @@ def extruder_control(gui: UserInterface) -> None:
             extruder.stop()
 
 def camera_control(gui: UserInterface) -> None:
+    print("Starting CAMERA Thread...")
     """Thread to handle hardware control"""
     time.sleep(1)
     GPIO.setmode(GPIO.BCM)
